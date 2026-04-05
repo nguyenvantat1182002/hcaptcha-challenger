@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from hcaptcha_challenger.models import THINKING_LEVEL_MODELS
+from hcaptcha_challenger.helper.cost_calculator import CostCalculator
 
 ResponseT = TypeVar("ResponseT", bound=BaseModel)
 
@@ -103,6 +104,7 @@ class GeminiProvider:
         response_schema: Type[ResponseT],
         user_prompt: str | None = None,
         description: str | None = None,
+        model: str | None = None,
         **kwargs,
     ) -> ResponseT:
         """
@@ -113,6 +115,7 @@ class GeminiProvider:
             user_prompt: User-provided prompt/instructions.
             description: System instruction/description for the model.
             response_schema: Pydantic model class for structured output.
+            model: Optional model override.
             **kwargs: Additional options passed to the API.
 
         Returns:
@@ -140,11 +143,27 @@ class GeminiProvider:
         self._set_thinking_config(config=config)
 
         # Generate response
+        target_model = model or self._model
         self._response: types.GenerateContentResponse = (
             await self.client.aio.models.generate_content(
-                model=self._model, contents=contents, config=config
+                model=target_model, contents=contents, config=config
             )
         )
+
+        # Log usage and cost
+        if usage := self._response.usage_metadata:
+            prompt_tokens = usage.prompt_token_count or 0
+            completion_tokens = usage.candidates_token_count or 0
+
+            # Calculate cost
+            cost_calculator = CostCalculator(pricing_file=Path("pricing.json"))
+            cost = cost_calculator.calculate(target_model, prompt_tokens, completion_tokens)
+            
+            logger.info(
+                f"LLM Usage [{target_model}]: "
+                f"Prompt={prompt_tokens}, Completion={completion_tokens}, "
+                f"Cost=${cost:.6f}"
+            )
 
         # Parse response
         if self._response.parsed:

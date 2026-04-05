@@ -14,6 +14,7 @@ dependencies = [
     "httpx[http2]>=0.28.1",
     "loguru>=0.7.3",
     "pydantic-settings>=2.12.0",
+    "camoufox[geoip]>=0.4.11",
 ]
 requires-python = ">=3.10"
 authors = [

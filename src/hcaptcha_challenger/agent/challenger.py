@@ -5,6 +5,7 @@
 # Description:
 import asyncio
 import json
+import requests
 import math
 import os
 import random
@@ -184,6 +185,12 @@ class AgentConfig(BaseSettings):
         default=DEFAULT_SCOT_MODEL,
         description="For the challenge type: `image_drag_drop` (single/multi)",
     )
+
+    # == Per-Challenge-Type Models == #
+    IMAGE_DRAG_SINGLE_MODEL: SCoTModelType | None = Field(default=None)
+    IMAGE_DRAG_MULTI_MODEL: SCoTModelType | None = Field(default=None)
+    IMAGE_LABEL_SINGLE_SELECT_MODEL: SCoTModelType | None = Field(default=None)
+    IMAGE_LABEL_MULTI_SELECT_MODEL: SCoTModelType | None = Field(default=None)
 
     coordinate_grid: CoordinateGrid | None = Field(default_factory=CoordinateGrid)
 
@@ -416,8 +423,9 @@ class RoboticArm:
         try:
             refresh_frame = await self.get_challenge_frame_locator()
             refresh_element = refresh_frame.locator("//div[@class='refresh button']")
+            await refresh_element.wait_for(state="visible", timeout=5000)
             await self.click_by_mouse(refresh_element)
-        except TimeoutError as err:
+        except Exception as err:
             logger.warning(f"Failed to click refresh button - {err=}")
 
     async def check_crumb_count(self):
@@ -519,7 +527,7 @@ class RoboticArm:
         grid_divisions.parent.mkdir(parents=True, exist_ok=True)
         plt.imsave(str(grid_divisions.resolve()), result)
 
-        return challenge_screenshot, grid_divisions
+        return challenge_screenshot, grid_divisions, bbox
 
     async def _perform_drag_drop(self, path: SpatialPath, steps: int = 25, delay_ms: int = 15):
         """
@@ -626,14 +634,23 @@ class RoboticArm:
         for cid in range(crumb_count):
             await self.page.wait_for_timeout(self.config.WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS)
 
-            raw, projection = await self._capture_spatial_mapping(frame_challenge, cache_key, cid)
+            raw, projection, bbox = await self._capture_spatial_mapping(frame_challenge, cache_key, cid)
 
             user_prompt = self._match_user_prompt(job_type)
+
+            # Select model
+            user_model = (
+                self.config.IMAGE_DRAG_SINGLE_MODEL
+                if job_type == ChallengeTypeEnum.IMAGE_DRAG_SINGLE
+                else self.config.IMAGE_DRAG_MULTI_MODEL
+            )
+            model = user_model or self.config.SPATIAL_PATH_REASONER_MODEL
 
             response = await self._spatial_path_reasoner(
                 challenge_screenshot=raw,
                 grid_divisions=projection,
                 auxiliary_information=user_prompt,
+                model=model,
             )
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
             self._spatial_path_reasoner.cache_response(
@@ -641,6 +658,12 @@ class RoboticArm:
             )
 
             for path in response.paths:
+                # Scale from 0-1000 grid to real pixels
+                path.start_point.x = bbox['x'] + (path.start_point.x / 1000) * bbox['width']
+                path.start_point.y = bbox['y'] + (path.start_point.y / 1000) * bbox['height']
+                path.end_point.x = bbox['x'] + (path.end_point.x / 1000) * bbox['width']
+                path.end_point.y = bbox['y'] + (path.end_point.y / 1000) * bbox['height']
+                
                 await self._perform_drag_drop(path)
 
             # {{< Verify >}}
@@ -656,14 +679,23 @@ class RoboticArm:
         for cid in range(crumb_count):
             await self.page.wait_for_timeout(self.config.WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS)
 
-            raw, projection = await self._capture_spatial_mapping(frame_challenge, cache_key, cid)
+            raw, projection, bbox = await self._capture_spatial_mapping(frame_challenge, cache_key, cid)
 
             user_prompt = self._match_user_prompt(job_type)
+
+            # Select model
+            user_model = (
+                self.config.IMAGE_LABEL_SINGLE_SELECT_MODEL
+                if job_type == ChallengeTypeEnum.IMAGE_LABEL_SINGLE_SELECT
+                else self.config.IMAGE_LABEL_MULTI_SELECT_MODEL
+            )
+            model = user_model or self.config.SPATIAL_POINT_REASONER_MODEL
 
             response = await self._spatial_point_reasoner(
                 challenge_screenshot=raw,
                 grid_divisions=projection,
                 auxiliary_information=user_prompt,
+                model=model,
             )
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
             self._spatial_point_reasoner.cache_response(
@@ -671,7 +703,11 @@ class RoboticArm:
             )
 
             for point in response.points:
-                await self.page.mouse.click(point.x, point.y, delay=180)
+                # Scale from 0-1000 grid to real pixels
+                real_x = bbox['x'] + (point.x / 1000) * bbox['width']
+                real_y = bbox['y'] + (point.y / 1000) * bbox['height']
+                
+                await self.page.mouse.click(real_x, real_y, delay=180)
                 await self.page.wait_for_timeout(500)
 
             # {{< Verify >}}
@@ -715,8 +751,9 @@ class AgentV:
     async def _task_handler(self, response: Response):
         if response.url.endswith("/hsw.js"):
             try:
-                hsw_text = await response.text()
+                hsw_text = requests.get(response.url).text
                 await self.page.evaluate(hsw_text)
+                
                 await self.page.evaluate(
                     """
                     () => {
@@ -791,7 +828,11 @@ class AgentV:
                     logger.warning("HSW reverse failed, fallback to regular processing")
                     self._captcha_payload_queue.put_nowait(None)
             except Exception as err:
-                logger.error(f"Reverse processing getcaptcha failed: {err}")
+                msg = str(err)
+                if "Execution context was destroyed" in msg:
+                    logger.debug(f"Reverse processing getcaptcha skipped (context destroyed): {err}")
+                else:
+                    logger.error(f"Reverse processing getcaptcha failed: {err}")
                 self._captcha_payload_queue.put_nowait(None)
         elif "/checkcaptcha/" in response.url:
             try:
@@ -809,6 +850,7 @@ class AgentV:
         except asyncio.TimeoutError:
             logger.error("Wait for captcha payload to timeout")
             self._captcha_payload = None
+            return ChallengeSignal.FAILURE
 
         self.robotic_arm.signal_crumb_count = None
         self.robotic_arm.captcha_payload = None
@@ -842,6 +884,8 @@ class AgentV:
                         else ChallengeTypeEnum.IMAGE_DRAG_MULTI
                     )
 
+            if request_type is None:
+                return ChallengeSignal.SUCCESS
             logger.warning(f"Unknown request_type: {request_type=}")
         except Exception as err:
             logger.error(f"Error parsing challenge type: {err}")
@@ -851,6 +895,9 @@ class AgentV:
 
     async def _solve_captcha(self):
         challenge_type = await self._review_challenge_type()
+        if challenge_type == ChallengeSignal.SUCCESS:
+            return ChallengeSignal.SUCCESS
+
         logger.debug(
             f"Start Challenge - type={challenge_type.value} count={self.robotic_arm.signal_crumb_count}"
         )
@@ -861,9 +908,8 @@ class AgentV:
                 if self.config.ignore_request_questions and self._captcha_payload:
                     for q in self.config.ignore_request_questions:
                         if q in self._captcha_payload.get_requester_question():
-                            await self.page.wait_for_timeout(2000)
-                            await self.robotic_arm.refresh_challenge()
-                            return await self._solve_captcha()
+                            logger.info(f"Challenge ignored by config.ignore_request_questions: {q}")
+                            return ChallengeSignal.IGNORED
 
             # {{< challenge start >}}
             match challenge_type:
@@ -904,9 +950,8 @@ class AgentV:
                     logger.warning(f"Unknown types of challenges: {challenge_type}")
             # {{< challenge end >}}
 
-            await self.page.wait_for_timeout(2000)
-            await self.robotic_arm.refresh_challenge()
-            return await self._solve_captcha()
+            logger.info(f"Challenge ignored by config.ignore_request_types: {challenge_type.value}")
+            return ChallengeSignal.IGNORED
         except Exception as err:
             # This is an execution error inside the challenge,
             # hcaptcha challenge does not automatically refresh
@@ -920,7 +965,9 @@ class AgentV:
         # ----------------------------------------------------------------------
         try:
             if self._captcha_response_queue.empty():
-                await asyncio.wait_for(self._solve_captcha(), timeout=self.config.EXECUTION_TIMEOUT)
+                solve_result = await asyncio.wait_for(self._solve_captcha(), timeout=self.config.EXECUTION_TIMEOUT)
+                if solve_result in (ChallengeSignal.IGNORED, ChallengeSignal.SUCCESS):
+                    return solve_result
         except asyncio.TimeoutError:
             logger.error("Challenge execution timed out", timeout=self.config.EXECUTION_TIMEOUT)
             return ChallengeSignal.EXECUTION_TIMEOUT

@@ -93,6 +93,7 @@ class ChallengeSignal(str, Enum):
     FAILURE = "failure"
     START = "start"
     RETRY = "retry"
+    IGNORED = "ignored"
     QR_DATA_NOT_FOUND = "qr_data_not_found"
     EXECUTION_TIMEOUT = "challenge_execution_timeout"
     RESPONSE_TIMEOUT = "challenge_response_timeout"

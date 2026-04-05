@@ -17,9 +17,9 @@ def _create_adaptive_contrast_grid(
     image: np.ndarray,
     bbox: Union[FloatRect, Tuple[float, float, float, float], List[float]],
     *,
-    x_line_space_num: int = 11,
+    x_line_space_num: int = 20,
     y_line_space_num: int = 20,
-    tick_labels_size: int = 12,
+    tick_labels_size: int = 14,
 ) -> np.ndarray:
     """
     Create coordinate grids with adaptive contrast colors.
@@ -51,13 +51,12 @@ def _create_adaptive_contrast_grid(
 
     fig, ax = plt.subplots(figsize=(10, 10))
 
-    ax.imshow(img, extent=(x, x + width, y + height, y))
+    ax.imshow(img, extent=(0, 1000, 1000, 0))
+    ax.set_xlim(0, 1000)
+    ax.set_ylim(1000, 0)
 
-    ax.set_xlim(x, x + width)
-    ax.set_ylim(y + height, y)
-
-    ax.spines['left'].set_position(('data', x))  # type: ignore[arg-type]
-    ax.spines['bottom'].set_position(('data', y + height))  # type: ignore[arg-type]
+    ax.spines['left'].set_position(('data', 0))  # type: ignore[arg-type]
+    ax.spines['bottom'].set_position(('data', 1000))  # type: ignore[arg-type]
 
     for spine in ax.spines.values():
         spine.set_color(grid_color)
@@ -68,8 +67,8 @@ def _create_adaptive_contrast_grid(
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    x_ticks = np.linspace(x, x + width, x_line_space_num)
-    y_ticks = np.linspace(y, y + height, y_line_space_num)
+    x_ticks = np.linspace(0, 1000, x_line_space_num)
+    y_ticks = np.linspace(0, 1000, y_line_space_num)
 
     ax.set_xticks(x_ticks)
     ax.set_yticks(y_ticks)
@@ -122,10 +121,10 @@ def create_coordinate_grid(
     image: Union[str, np.ndarray, Path],
     bbox: Union[FloatRect, Tuple[float, float, float, float], List[float]],
     *,
-    x_line_space_num: int = 11,
+    x_line_space_num: int = 20,
     y_line_space_num: int = 20,
     adaptive_contrast: bool = False,
-    tick_labels_size: int = 10,
+    tick_labels_size: int = 12,
     color: str = "gray",
 ) -> np.ndarray:
     """
@@ -172,24 +171,24 @@ def create_coordinate_grid(
     # Create figure with appropriate size
     fig, ax = plt.subplots(figsize=(10, 10))
 
-    # Display the image
-    ax.imshow(img, extent=(x, x + width, y + height, y))  # Note the y-axis inversion
+    # Display the image with fixed 0-1000 extent
+    ax.imshow(img, extent=(0, 1000, 1000, 0))  # Note the y-axis inversion
 
     # Set axis limits
-    ax.set_xlim(x, x + width)
-    ax.set_ylim(y + height, y)  # Inverted y-axis to match image coordinates
+    ax.set_xlim(0, 1000)
+    ax.set_ylim(1000, 0)  # Inverted y-axis to match image coordinates
 
     # Set origin in the top-left corner
-    ax.spines['left'].set_position(('data', x))  # type: ignore[arg-type]
-    ax.spines['bottom'].set_position(('data', y + height))  # type: ignore[arg-type]
+    ax.spines['left'].set_position(('data', 0))  # type: ignore[arg-type]
+    ax.spines['bottom'].set_position(('data', 1000))  # type: ignore[arg-type]
 
     # Remove top and right spines
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
     # Create grid lines
-    x_ticks = np.linspace(x, x + width, x_line_space_num)
-    y_ticks = np.linspace(y, y + height, y_line_space_num)
+    x_ticks = np.linspace(0, 1000, x_line_space_num)
+    y_ticks = np.linspace(0, 1000, y_line_space_num)
 
     # Set ticks
     ax.set_xticks(x_ticks)

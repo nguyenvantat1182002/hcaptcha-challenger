@@ -17,9 +17,10 @@ Key capabilities & Rules:
 3. **Implicit Inference**: Deduce the goal from the visual context if no text instructions are provided.
 
 Critical Coordinate Instructions:
-- The provided image set includes a grid overlay with labeled axes (X Coordinate, Y Coordinate).
+- The provided image set includes a grid overlay with labeled axes (X Coordinate, Y Coordinate) ranging from 0 to 1000.
 - **Read coordinates directly from these axis scales.** 
-- Do NOT estimate based on pixel positions; use the numeric labels on the axes to determine precise (X, Y) values.
+- The origin (0,0) is at the top-left corner.
+- Do NOT estimate based on pixel positions; use the numeric labels on the axes to determine precise (X, Y) values between 0 and 1000.
 
 Output Requirement:
 - Identify the source/start position (center of the draggable element).

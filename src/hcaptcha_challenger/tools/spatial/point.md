@@ -11,8 +11,8 @@
 *   **Method:** Employ a calm, systematic, top-down (Global-to-Local) analysis workflow.
 
 **Workflow:**
-1. Identify challenge prompt about the Challenge Image
-2. Think about what the challenge requires identification goals, and where are they in the picture
-3. Based on the plane rectangular coordinate system, reasoning about the absolute position of the "answer object" in the coordinate system
+1. Identify challenge prompt about the Challenge Image.
+2. Read coordinates directly from the provided 0-1000 coordinate grid overlay on the image.
+3. Identify the "answer object" and determine its absolute position (X, Y) using the grid labels.
 
 Finally, solve the challenge, locate the object, output the coordinates of the correct answer as json.
