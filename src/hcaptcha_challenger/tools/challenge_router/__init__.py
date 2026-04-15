@@ -41,8 +41,8 @@ class ChallengeRouter(Reasoner[FastShotModelType, ChallengeRouterResult]):
         **kwargs,
     ):
         super().__init__(gemini_api_key, model, provider=provider, **kwargs)
-
-    async def __call__(
+        
+    def __call__(
         self, *, challenge_screenshot: Union[str, Path], **kwargs
     ) -> ChallengeRouterResult:
         """
@@ -55,7 +55,7 @@ class ChallengeRouter(Reasoner[FastShotModelType, ChallengeRouterResult]):
         Returns:
             ChallengeRouterResult containing challenge_type and challenge_prompt.
         """
-        return await self._provider.generate_with_images(
+        return self._provider.generate_with_images(
             images=[Path(challenge_screenshot)],
             user_prompt="""
 Your task is to classify challenge questions into one of four types:

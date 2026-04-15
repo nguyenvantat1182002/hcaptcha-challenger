@@ -4,7 +4,6 @@ GeminiProvider - Google Gemini API implementation.
 
 This provider wraps the google-genai SDK to provide image-based content generation.
 """
-import asyncio
 import json
 from pathlib import Path
 from typing import List, Type, TypeVar, cast
@@ -64,13 +63,12 @@ class GeminiProvider:
         """Get the last response for debugging/caching purposes."""
         return self._response
 
-    async def _upload_files(self, files: List[Path]) -> list[types.File]:
-        """Upload multiple files concurrently."""
+    def _upload_files(self, files: List[Path]) -> list[types.File]:
+        """Upload multiple files sequentially."""
         valid_files = [f for f in files if f and Path(f).exists()]
         if not valid_files:
             return []
-        upload_tasks = [self.client.aio.files.upload(file=f) for f in valid_files]
-        return list(await asyncio.gather(*upload_tasks))
+        return [self.client.files.upload(file=f) for f in valid_files]
 
     @staticmethod
     def _files_to_parts(files: List[types.File]) -> List[types.Part]:
@@ -96,7 +94,7 @@ class GeminiProvider:
             f"Wait 3 seconds - Exception: {retry_state.outcome.exception()}"
         ),
     )
-    async def generate_with_images(
+    def generate_with_images(
         self,
         *,
         images: List[Path],
@@ -119,7 +117,7 @@ class GeminiProvider:
             Parsed response matching the response_schema type.
         """
         # Upload files
-        uploaded_files = await self._upload_files(images)
+        uploaded_files = self._upload_files(images)
         parts = self._files_to_parts(uploaded_files)
 
         # Add user prompt if provided
@@ -139,9 +137,9 @@ class GeminiProvider:
         # Set thinking config if applicable
         self._set_thinking_config(config=config)
 
-        # Generate response
+        # Generate response (sync)
         self._response: types.GenerateContentResponse = (
-            await self.client.aio.models.generate_content(
+            self.client.models.generate_content(
                 model=self._model, contents=contents, config=config
             )
         )

@@ -42,7 +42,7 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
     ):
         super().__init__(gemini_api_key, model, provider=provider, **kwargs)
 
-    async def __call__(
+    def __call__(
         self, *, challenge_screenshot: Union[str, Path], **kwargs
     ) -> ImageBinaryChallenge:
         """
@@ -55,7 +55,7 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
         Returns:
             ImageBinaryChallenge containing the selected cell coordinates.
         """
-        return await self._provider.generate_with_images(
+        return self._provider.generate_with_images(
             images=[Path(challenge_screenshot)],
             user_prompt="Solve the challenge, use [0,0] ~ [2,2] to locate 9grid, output the coordinates of the correct answer as JSON.",
             description=self.description,

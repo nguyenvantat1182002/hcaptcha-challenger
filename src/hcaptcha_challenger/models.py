@@ -88,7 +88,9 @@ class ChallengeSignal(str, Enum):
       FAILURE: The challenge failed or encountered an error.
       START: The challenge has been initiated or started.
     """
-
+    
+    UNKNOWN = 'unknown'
+    IGNORE = 'ignore'
     SUCCESS = "success"
     FAILURE = "failure"
     START = "start"

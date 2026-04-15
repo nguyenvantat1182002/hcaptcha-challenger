@@ -27,7 +27,7 @@ class SpatialReasoner(Reasoner[SCoTModelType, ResponseT], ABC):
     - Standard image upload pattern (challenge + grid)
     """
 
-    async def _invoke_spatial(
+    def _invoke_spatial(
         self,
         *,
         challenge_screenshot: Path,
@@ -53,7 +53,7 @@ class SpatialReasoner(Reasoner[SCoTModelType, ResponseT], ABC):
         """
         images: List[Path] = [challenge_screenshot, grid_divisions]
 
-        return await self._provider.generate_with_images(
+        return self._provider.generate_with_images(
             images=images,
             user_prompt=auxiliary_information,
             description=self.description,

@@ -27,7 +27,7 @@ class ChatProvider(Protocol[ResponseT]):
     This is an extensibility point - users can implement their own providers
     """
 
-    async def generate_with_images(
+    def generate_with_images(
         self,
         *,
         images: List[Path],
