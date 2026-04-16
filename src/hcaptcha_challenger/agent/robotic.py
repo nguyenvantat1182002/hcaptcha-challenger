@@ -130,16 +130,16 @@ class RoboticArm:
     def screenshot_element_in_frame(self, element: ChromiumElement, save_path: Path) -> Path:
         """Capture a screenshot of an element inside an iframe.
 
-        Uses full-viewport screenshot + PIL crop + resize to produce
-        consistent, high-quality screenshots regardless of browser zoom,
-        device-scale-factor, or DPR settings.
+        Uses full-viewport screenshot + PIL crop to avoid coordinate space
+        mismatches caused by non-default zoom levels, device-scale-factor,
+        or DPR overrides. This approach is immune to those settings because
+        it measures the actual CSS-to-pixel ratio empirically.
 
         Steps:
         1. Takes a full viewport screenshot (captures exactly what's visible)
         2. Measures CSS-to-image-pixel ratio via Page.getLayoutMetrics
         3. Computes element's absolute CSS position (iframe offset + border + element rect)
         4. Crops the image at the correct pixel coordinates
-        5. Resizes to the element's "normal" CSS dimensions (compensating for zoom/DPR)
         """
         from PIL import Image
         import io
@@ -152,24 +152,15 @@ class RoboticArm:
         full_img = Image.open(io.BytesIO(base64.b64decode(data['data'])))
         img_w, img_h = full_img.size
 
-        # Get layout metrics to compute both coordinate ratio and zoom factor
+        # Get CSS visual viewport dimensions to compute CSS-to-pixel ratio
         metrics = self.page.tab._run_cdp('Page.getLayoutMetrics')
-
         css_vp = metrics.get('cssVisualViewport', {})
         css_vp_w = css_vp.get('clientWidth', img_w)
         css_vp_h = css_vp.get('clientHeight', img_h)
 
-        layout_vp = metrics.get('cssLayoutViewport', {})
-        layout_w = layout_vp.get('clientWidth', css_vp_w)
-        layout_h = layout_vp.get('clientHeight', css_vp_h)
-
-        # CSS-to-image-pixel ratio (accounts for DPR)
+        # This ratio accounts for ALL zoom/scale/DPR effects automatically
         ratio_x = img_w / css_vp_w if css_vp_w else 1.0
         ratio_y = img_h / css_vp_h if css_vp_h else 1.0
-
-        # Page zoom factor: layout/visual viewport ratio
-        # At 100% zoom: page_zoom = 1.0, at 50% zoom: page_zoom ≈ 0.5
-        page_zoom = layout_w / css_vp_w if css_vp_w else 1.0
 
         # Get element's bounding rect relative to iframe viewport (CSS pixels)
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
@@ -197,15 +188,6 @@ class RoboticArm:
         )
 
         cropped = full_img.crop(crop_box)
-
-        # Resize to compensate for zoom and DPR
-        # target = element's CSS dimensions at 100% zoom
-        # rect dimensions are in "zoomed" CSS pixels, divide by page_zoom to get normal size
-        target_w = round(rect['width'] / page_zoom) if page_zoom else cropped.width
-        target_h = round(rect['height'] / page_zoom) if page_zoom else cropped.height
-
-        if target_w > 0 and target_h > 0 and (target_w != cropped.width or target_h != cropped.height):
-            cropped = cropped.resize((target_w, target_h), Image.LANCZOS)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         cropped.save(str(save_path))
