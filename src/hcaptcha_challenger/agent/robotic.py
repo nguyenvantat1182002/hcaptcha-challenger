@@ -156,34 +156,25 @@ class RoboticArm:
         except (ValueError, AttributeError):
             bt, bl = 0, 0
 
-        # Get device pixel ratio
-        dpr = self.page._run_js('return window.devicePixelRatio;')
+        # Compute absolute position on the page
+        clip_x = frame_left + bl + rect['x']
+        clip_y = frame_top + bt + rect['y']
 
-        # Compute absolute position and size
-        # If multiplication (* dpr) moved content to bottom-right (meaning clip origin was too small),
-        # we try division (/ dpr) to shift the clip origin further and capture the correct area.
-        if dpr != 1.0:
-            scale_factor = 1 / dpr
-            lx = (frame_left + bl + rect['x']) * scale_factor
-            ly = (frame_top + bt + rect['y']) * scale_factor
-            lw = rect['width'] * scale_factor
-            lh = rect['height'] * scale_factor
-        else:
-            lx = frame_left + bl + rect['x']
-            ly = frame_top + bt + rect['y']
-            lw = rect['width']
-            lh = rect['height']
-
-        # Capture from top-level tab
+        # Get actual device pixel ratio (needed for correct CDP clipping scaling)
+        dpr = self.page.tab._run_js('return window.devicePixelRatio;')
+        if self._debug:
+            logger.debug(f"Screenshot alignment: DPR={dpr}, Clip=({clip_x}, {clip_y}), Size={rect['width']}x{rect['height']}")
+        
+        # Capture from top-level tab (Page.captureScreenshot requires top-level target)
         data = self.page.tab._run_cdp(
             'Page.captureScreenshot',
             format='png',
             clip={
-                'x': lx,
-                'y': ly,
-                'width': lw,
-                'height': lh,
-                'scale': 1
+                'x': clip_x,
+                'y': clip_y,
+                'width': rect['width'],
+                'height': rect['height'],
+                'scale': dpr
             }
         )
         img_bytes = base64.b64decode(data['data'])
