@@ -136,6 +136,12 @@ class GeminiProvider:
 
         actual_model = kwargs.pop("model", self._model)
 
+        # Log which model is being used
+        if actual_model != self._model:
+            logger.debug(f"Using model override: {actual_model} (default: {self._model})")
+        else:
+            logger.debug(f"Using model: {actual_model}")
+
         # Set thinking config if applicable
         self._set_thinking_config(config=config, model=actual_model)
 
