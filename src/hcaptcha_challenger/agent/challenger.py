@@ -4,17 +4,17 @@
 # GitHub     : https://github.com/QIN2DIM
 # Description:
 
+import time
 import threading
 import asyncio
 import json
 import msgpack
 
 from queue import Queue, Empty
-from contextlib import suppress
 from datetime import datetime
 from typing import List
-from DrissionPage._pages.chromium_frame import ChromiumFrame
 from loguru import logger
+from DrissionPage._pages.chromium_frame import ChromiumFrame
 
 from hcaptcha_challenger.agent.robotic import RoboticArm
 from hcaptcha_challenger.agent.config import AgentConfig
@@ -38,8 +38,7 @@ class AgentV:
         self._captcha_payload_queue: Queue[CaptchaPayload | None] = Queue()
         self._captcha_response_queue: Queue[CaptchaResponse] = Queue()
         self.cr_list: List[CaptchaResponse] = []
-
-        # self.page.on("response", self._task_handler)
+        
         self.page.listen.start(['/getcaptcha', '/checkcaptcha'])
         threading.Thread(target=self._task_handler, daemon=True).start()
 
@@ -185,37 +184,41 @@ class AgentV:
     def wait_for_challenge(self) -> ChallengeSignal:
         # Assigning human-computer challenge tasks to the main thread coroutine.
         # ----------------------------------------------------------------------
-        try:
-            if self._captcha_response_queue.empty():
-                result = self._solve_captcha()
-                if not result:
-                    return ChallengeSignal.FAILURE
-        except asyncio.TimeoutError:
-            logger.error("Challenge execution timed out", timeout=self.config.EXECUTION_TIMEOUT)
-            return ChallengeSignal.EXECUTION_TIMEOUT
+        if self._captcha_response_queue.empty():
+            result = self._solve_captcha()
+            if not result:
+                return ChallengeSignal.FAILURE
 
         # Waiting for hCAPTCHA response processing result
         # -----------------------------------------------
         # After the completion of the human-machine challenge workflow,
         # it is expected to obtain a signal indicating whether the challenge was successful in the cr_queue.
         logger.debug("Start checking captcha response")
-        try:
-            cr = self._captcha_response_queue.get(timeout=self.config.RESPONSE_TIMEOUT)
-        except Empty:
-            logger.error(f"Wait for captcha response timeout {self.config.RESPONSE_TIMEOUT}s")
-            return ChallengeSignal.EXECUTION_TIMEOUT
-        else:
-            # Match: Timeout / Loss
-            if not cr or not cr.is_pass:
-                if self.config.RETRY_ON_FAILURE:
-                    logger.warning("Failed to challenge, try to retry the strategy")
-                    return self.wait_for_challenge()
-                return ChallengeSignal.FAILURE
-            # Match: Success
-            if cr.is_pass:
-                logger.success("Challenge success")
-                self._cache_validated_captcha_response(cr)
-                return ChallengeSignal.SUCCESS
+        end_time = time.monotonic() + self.config.RESPONSE_TIMEOUT
+        cr = None
+
+        while not cr:
+            if time.monotonic() > end_time:
+                return ChallengeSignal.EXECUTION_TIMEOUT
+            
+            if not self._captcha_response_queue.empty():
+                cr = self._captcha_response_queue.get_nowait()
+            else:
+                body = self.page.ele('tag:body')
+                if bool(body.attr('aria-hidden')):
+                    return ChallengeSignal.FAILURE
+            
+            time.sleep(1)
+            
+        # Match: Timeout / Loss
+        if not cr or not cr.is_pass:
+            return ChallengeSignal.FAILURE
+            
+        # Match: Success
+        if cr.is_pass:
+            logger.success("Challenge success")
+            self._cache_validated_captcha_response(cr)
+            return ChallengeSignal.SUCCESS
 
         return ChallengeSignal.FAILURE
 

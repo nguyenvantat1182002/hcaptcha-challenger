@@ -39,14 +39,7 @@ class AgentConfig(BaseSettings):
     captcha_response_dir: Path = Path("tmp/.captcha")
     ignore_request_types: IGNORE_REQUEST_TYPE_LIST | None = Field(default_factory=list)
     ignore_request_questions: List[str] | None = Field(default_factory=list)
-
-    DISABLE_BEZIER_TRAJECTORY: bool = Field(
-        default=False,
-        description="If you use Camoufox, it is recommended to turn off "
-        "the custom Bessel track generator of hcaptcha-challenger "
-        "and use Camoufox(humanize=True)",
-    )
-
+    
     MOUSE_SPEED: float = Field(
         default=1.0,
         description="Mouse movement speed multiplier. "
@@ -77,9 +70,6 @@ class AgentConfig(BaseSettings):
     RESPONSE_TIMEOUT: float = Field(
         default=30,
         description="When your local network is poor, increase this value appropriately [unit: second]",
-    )
-    RETRY_ON_FAILURE: bool = Field(
-        default=True, description="Re-execute the challenge when it fails"
     )
     WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS: int = Field(
         default=1500,

@@ -1,10 +1,8 @@
 import base64
 import matplotlib.pyplot as plt
-import math
-import random
 import re
 
-from typing import Tuple, List
+from typing import Tuple
 from pathlib import Path
 from uuid import uuid4
 from loguru import logger
@@ -15,10 +13,10 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from contextlib import suppress
 
 from hcaptcha_challenger.agent.mouse import (
-    RawMouse, human_move, human_click, click_target, Point,
+    human_move, human_click, click_target
 )
 from hcaptcha_challenger.agent.mouse_config import (
-    HumanConfig, resolve_config, sleep_ms, rand, rand_range,
+    resolve_config, sleep_ms, rand
 )
 
 
@@ -37,69 +35,6 @@ from hcaptcha_challenger.models import (
     SpatialPath,
     CaptchaPayload,
 )
-
-
-def _generate_bezier_trajectory(
-    start: Tuple[float, float], end: Tuple[float, float], steps: int
-) -> List[Tuple[float, float]]:
-    """
-    Generates a quadratic bezier curve trajectory between start and end points.
-    """
-    points = []
-
-    # Calculate distance between points
-    distance = math.sqrt((end[0] - start[0]) ** 2 + (end[1] - start[1]) ** 2)
-
-    # Create control point(s) for the bezier curve
-    # For longer distances, we use a higher control point offset
-    offset_factor = min(0.3, max(0.1, distance / 1000))
-
-    # Random control point that's offset from the midpoint
-    mid_x = (start[0] + end[0]) / 2
-    mid_y = (start[1] + end[1]) / 2
-
-    # Create slight randomness in the control point
-    control_x = mid_x + random.uniform(-1, 1) * distance * offset_factor
-    control_y = mid_y + random.uniform(-1, 1) * distance * offset_factor
-
-    # Generate points along the bezier curve
-    for i in range(steps + 1):
-        t = i / steps
-        # Quadratic bezier formula
-        x = (1 - t) ** 2 * start[0] + 2 * (1 - t) * t * control_x + t**2 * end[0]
-        y = (1 - t) ** 2 * start[1] + 2 * (1 - t) * t * control_y + t**2 * end[1]
-        points.append((x, y))
-
-    return points
-
-
-def _generate_dynamic_delays(steps: int, base_delay: int) -> List[float]:
-    """
-    Generates dynamic delays between mouse movements to simulate human-like acceleration/deceleration.
-    """
-    delays = []
-
-    # Acceleration profile: slower at start and end, faster in the middle
-    for i in range(steps + 1):
-        progress = i / steps
-
-        # Ease in-out function (slow start, fast middle, slow end)
-        if progress < 0.5:
-            factor = 2 * progress * progress  # Accelerate
-        else:
-            progress = progress - 1
-            factor = 1 - (-2 * progress * progress)  # Decelerate
-
-        # Adjust delay based on position in the curve (1.5x at ends, 0.6x in middle)
-        delay_factor = 1.5 - 0.9 * factor
-
-        # Add slight randomness to delays (±10%)
-        random_factor = random.uniform(0.9, 1.1)
-
-        delays.append(base_delay * delay_factor * random_factor)
-
-    return delays
-
 
 
 class DrissionPageMouse:
@@ -156,7 +91,6 @@ class DrissionPageMouse:
     def wheel(self, delta_x: float, delta_y: float) -> None:
         self._sync_actions_pos()
         self._actions.scroll(delta_y=delta_y, delta_x=delta_x)
-
 
 
 class RoboticArm:
@@ -249,34 +183,7 @@ class RoboticArm:
 
     def get_challenge_frame_locator(self) -> ChromiumFrame:
         return self.page
-
-    def _find_challenge_frame_recursive(
-        self, frame: ChromiumFrame, current_depth=0, max_depth=4
-    ) -> ChromiumFrame | None:
-        if current_depth >= max_depth:
-            return None
-
-        candidate_frames = []
-
-        for child_frame in frame.child_frames:
-            if (
-                not child_frame.child_frames
-                and child_frame.url.startswith("https://newassets.hcaptcha.com/captcha/v1/")
-                and "frame=challenge" in child_frame.url
-            ):
-                candidate_frames.append(child_frame)
-            else:
-                found_in_child = self._find_challenge_frame_recursive(
-                    child_frame, current_depth + 1, max_depth
-                )
-                if found_in_child:
-                    return found_in_child
-
-        if candidate_frames:
-            return candidate_frames[0]
-
-        return None
-
+        
     def _match_user_prompt(self, job_type: ChallengeTypeEnum) -> str:
         try:
             challenge_prompt = (
@@ -318,17 +225,9 @@ class RoboticArm:
         """Click the hCaptcha checkbox in the parent page."""
         checkbox_frame = self.page.parent().ele(self.checkbox_selector)
         if checkbox_frame:
-            checkbox_ele = checkbox_frame.ele("//div[@id='checkbox']")
+            checkbox_ele = checkbox_frame.ele("css:div[id='checkbox']")
             self.click_element(checkbox_ele)
-
-    def refresh_challenge(self):
-        try:
-            frame_challenge = self.get_challenge_frame_locator()
-            refresh_element = frame_challenge.ele("//div[@class='refresh button']")
-            self.click_element(refresh_element)
-        except Exception as err:
-            logger.warning(f"Failed to click refresh button - {err=}")
-
+            
     def check_crumb_count(self) -> int:
         """Page turn in tasks"""
         # # Determine the number of tasks based on hsw
@@ -347,17 +246,17 @@ class RoboticArm:
         return self.signal_crumb_count
 
     def check_challenge_type(self) -> RequestType | ChallengeTypeEnum | None:
-        samples = self.page.eles("css://div[@class='task-image']")
+        samples = self.page.eles("css:div[class='task-image']")
         count = len(samples)
 
         if isinstance(count, int) and count == 9:
             return RequestType.IMAGE_LABEL_BINARY
             
         if isinstance(count, int) and count == 0:
-            tms = self.config.WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS * 1.5
+            tms = self.config.WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS * 1.5 / 1000
             self.page.wait(tms)
 
-            challenge_view = self.page.ele("css://div[@class='challenge-view']")
+            challenge_view = self.page.ele("css:div[class='challenge-view']")
 
             cache_path = self.config.cache_dir.joinpath(f"challenge_view/_artifacts/{uuid4()}.png")
             self.screenshot_element_in_frame(challenge_view, cache_path)
@@ -438,14 +337,7 @@ class RoboticArm:
         end_x, end_y = path.end_point.x, path.end_point.y
         raw = self._raw_mouse
         cfg = self._human_cfg
-
-        if self.config.DISABLE_BEZIER_TRAJECTORY:
-            raw.move(start_x, start_y)
-            raw.down()
-            raw.move(end_x, end_y)
-            raw.up()
-            return
-
+        
         # Move to start position with human-like trajectory
         human_move(raw, raw.curr_x, raw.curr_y, start_x, start_y, cfg)
 
@@ -471,7 +363,7 @@ class RoboticArm:
         cache_key = self.config.create_cache_key(self.captcha_payload)
         
         for cid in range(crumb_count):
-            print(self._wait_for_all_loaders_complete())
+            self._wait_for_all_loaders_complete()
 
             # Get challenge-view
             challenge_view = frame_challenge.ele("css:div[class='challenge-view']")
