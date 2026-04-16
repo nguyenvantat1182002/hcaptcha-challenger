@@ -128,17 +128,18 @@ class RoboticArm:
         self._challenge_selector = "//iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=challenge')]"
 
     def screenshot_element_in_frame(self, element: ChromiumElement, save_path: Path) -> Path:
-        """Capture a high-resolution screenshot of an element inside an iframe.
+        """Capture a screenshot of an element inside an iframe.
 
-        Uses DPR override + full-viewport screenshot + PIL crop to produce
-        sharp images regardless of browser zoom/DPR settings.
+        Uses full-viewport screenshot + PIL crop + resize to produce
+        consistent, high-quality screenshots regardless of browser zoom,
+        device-scale-factor, or DPR settings.
 
         Steps:
-        1. Temporarily overrides devicePixelRatio to 2 for high-res rendering
-        2. Takes a full viewport screenshot at the overridden resolution
-        3. Restores original DPR settings
-        4. Measures CSS-to-image-pixel ratio from the screenshot
-        5. Computes element's absolute CSS position and crops
+        1. Takes a full viewport screenshot (captures exactly what's visible)
+        2. Measures CSS-to-image-pixel ratio via Page.getLayoutMetrics
+        3. Computes element's absolute CSS position (iframe offset + border + element rect)
+        4. Crops the image at the correct pixel coordinates
+        5. Resizes to the element's "normal" CSS dimensions (compensating for zoom/DPR)
         """
         from PIL import Image
         import io
@@ -146,34 +147,29 @@ class RoboticArm:
         # Scroll element into view within the iframe
         element._run_js('this.scrollIntoView({block: "center"});')
 
-        # Get current CSS viewport dimensions (before override)
-        metrics = self.page.tab._run_cdp('Page.getLayoutMetrics')
-        css_vp = metrics.get('cssVisualViewport', {})
-        vp_w = int(css_vp.get('clientWidth', 1920))
-        vp_h = int(css_vp.get('clientHeight', 1080))
-
-        # Temporarily override DPR to 2 for high-resolution rendering
-        # This re-renders the page at 2x device pixels without changing CSS layout
-        target_dpr = 2
-        try:
-            self.page.tab._run_cdp(
-                'Emulation.setDeviceMetricsOverride',
-                width=vp_w, height=vp_h,
-                deviceScaleFactor=target_dpr, mobile=False
-            )
-
-            # Take high-res full viewport screenshot
-            data = self.page.tab._run_cdp('Page.captureScreenshot', format='png')
-        finally:
-            # Always restore original device metrics
-            self.page.tab._run_cdp('Emulation.clearDeviceMetricsOverride')
-
+        # Take full viewport screenshot (no clip = captures the entire visible area)
+        data = self.page.tab._run_cdp('Page.captureScreenshot', format='png')
         full_img = Image.open(io.BytesIO(base64.b64decode(data['data'])))
         img_w, img_h = full_img.size
 
-        # CSS-to-pixel ratio (should be ~target_dpr after override)
-        ratio_x = img_w / vp_w if vp_w else 1.0
-        ratio_y = img_h / vp_h if vp_h else 1.0
+        # Get layout metrics to compute both coordinate ratio and zoom factor
+        metrics = self.page.tab._run_cdp('Page.getLayoutMetrics')
+
+        css_vp = metrics.get('cssVisualViewport', {})
+        css_vp_w = css_vp.get('clientWidth', img_w)
+        css_vp_h = css_vp.get('clientHeight', img_h)
+
+        layout_vp = metrics.get('cssLayoutViewport', {})
+        layout_w = layout_vp.get('clientWidth', css_vp_w)
+        layout_h = layout_vp.get('clientHeight', css_vp_h)
+
+        # CSS-to-image-pixel ratio (accounts for DPR)
+        ratio_x = img_w / css_vp_w if css_vp_w else 1.0
+        ratio_y = img_h / css_vp_h if css_vp_h else 1.0
+
+        # Page zoom factor: layout/visual viewport ratio
+        # At 100% zoom: page_zoom = 1.0, at 50% zoom: page_zoom ≈ 0.5
+        page_zoom = layout_w / css_vp_w if css_vp_w else 1.0
 
         # Get element's bounding rect relative to iframe viewport (CSS pixels)
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
@@ -201,6 +197,15 @@ class RoboticArm:
         )
 
         cropped = full_img.crop(crop_box)
+
+        # Resize to compensate for zoom and DPR
+        # target = element's CSS dimensions at 100% zoom
+        # rect dimensions are in "zoomed" CSS pixels, divide by page_zoom to get normal size
+        target_w = round(rect['width'] / page_zoom) if page_zoom else cropped.width
+        target_h = round(rect['height'] / page_zoom) if page_zoom else cropped.height
+
+        if target_w > 0 and target_h > 0 and (target_w != cropped.width or target_h != cropped.height):
+            cropped = cropped.resize((target_w, target_h), Image.LANCZOS)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         cropped.save(str(save_path))
