@@ -138,8 +138,7 @@ class RoboticArm:
         1. Gets element rect via JS getBoundingClientRect() (iframe-relative)
         2. Gets iframe position on page via frame_ele.rect.viewport_location
         3. Adds iframe border offsets for accurate absolute coordinates
-        4. Queries devicePixelRatio to handle custom DPI scaling
-        5. Captures from top-level tab with clip at the computed absolute position
+        4. Captures from top-level tab with clip at the computed absolute position
         """
         # Scroll element into view within the iframe
         element._run_js('this.scrollIntoView({block: "center"});')
@@ -157,22 +156,27 @@ class RoboticArm:
         except (ValueError, AttributeError):
             bt, bl = 0, 0
 
-        # Compute absolute position on the page (CSS pixels)
-        clip_x = frame_left + bl + rect['x']
-        clip_y = frame_top + bt + rect['y']
-        clip_w = rect['width']
-        clip_h = rect['height']
+        # Compute absolute position on the page in logical pixels
+        lx = frame_left + bl + rect['x']
+        ly = frame_top + bt + rect['y']
+        lw = rect['width']
+        lh = rect['height']
 
-        # Query devicePixelRatio to handle custom DPI scaling
-        # (e.g., --force-device-scale-factor=0.5)
-        dpr = self.page.tab._run_js('return window.devicePixelRatio;') or 1.0
+        # Get device pixel ratio to handle high-DPI or forced scale factors
+        dpr = self.page._run_js('return window.devicePixelRatio;')
 
-        # Capture from top-level tab (Page.captureScreenshot requires top-level target)
-        # CDP clip uses device-independent (CSS) pixels, but scale param controls output resolution
+        # Page.captureScreenshot 'clip' coordinates often need scaling by dpr 
+        # when a forced device scale factor is active.
         data = self.page.tab._run_cdp(
             'Page.captureScreenshot',
             format='png',
-            clip={'x': clip_x, 'y': clip_y, 'width': clip_w, 'height': clip_h, 'scale': dpr}
+            clip={
+                'x': lx * dpr,
+                'y': ly * dpr,
+                'width': lw * dpr,
+                'height': lh * dpr,
+                'scale': 1
+            }
         )
         img_bytes = base64.b64decode(data['data'])
 
