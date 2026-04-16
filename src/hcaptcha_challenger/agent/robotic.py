@@ -128,26 +128,44 @@ class RoboticArm:
         self._challenge_selector = "//iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=challenge')]"
 
     def screenshot_element_in_frame(self, element: ChromiumElement, save_path: Path) -> Path:
-        """Capture a screenshot of an element inside an iframe using CDP directly.
+        """Capture a screenshot of an element inside an iframe.
 
-        DrissionPage's built-in element.get_screenshot() has a coordinate mapping
-        bug for elements inside iframes. CDP's Page.captureScreenshot only works
-        on top-level targets.
+        Uses full-viewport screenshot + PIL crop to avoid coordinate space
+        mismatches caused by non-default zoom levels, device-scale-factor,
+        or DPR overrides. This approach is immune to those settings because
+        it measures the actual CSS-to-pixel ratio empirically.
 
-        This method:
-        1. Gets element rect via JS getBoundingClientRect() (iframe-relative)
-        2. Gets iframe position on page via frame_ele.rect.viewport_location
-        3. Adds iframe border offsets for accurate absolute coordinates
-        4. Queries devicePixelRatio to compensate for non-default zoom/scale-factor
-        5. Captures from top-level tab with clip at the computed absolute position
+        Steps:
+        1. Takes a full viewport screenshot (captures exactly what's visible)
+        2. Measures CSS-to-image-pixel ratio via Page.getLayoutMetrics
+        3. Computes element's absolute CSS position (iframe offset + border + element rect)
+        4. Crops the image at the correct pixel coordinates
         """
+        from PIL import Image
+        import io
+
         # Scroll element into view within the iframe
         element._run_js('this.scrollIntoView({block: "center"});')
 
-        # Get element's bounding rect relative to iframe viewport
+        # Take full viewport screenshot (no clip = captures the entire visible area)
+        data = self.page.tab._run_cdp('Page.captureScreenshot', format='png')
+        full_img = Image.open(io.BytesIO(base64.b64decode(data['data'])))
+        img_w, img_h = full_img.size
+
+        # Get CSS visual viewport dimensions to compute CSS-to-pixel ratio
+        metrics = self.page.tab._run_cdp('Page.getLayoutMetrics')
+        css_vp = metrics.get('cssVisualViewport', {})
+        css_vp_w = css_vp.get('clientWidth', img_w)
+        css_vp_h = css_vp.get('clientHeight', img_h)
+
+        # This ratio accounts for ALL zoom/scale/DPR effects automatically
+        ratio_x = img_w / css_vp_w if css_vp_w else 1.0
+        ratio_y = img_h / css_vp_h if css_vp_h else 1.0
+
+        # Get element's bounding rect relative to iframe viewport (CSS pixels)
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
 
-        # Get iframe element's position on the top-level page viewport
+        # Get iframe element's position on the top-level page viewport (CSS pixels)
         frame_left, frame_top = self.page.frame_ele.rect.viewport_location
 
         # Account for iframe border width
@@ -157,38 +175,22 @@ class RoboticArm:
         except (ValueError, AttributeError):
             bt, bl = 0, 0
 
-        # Compute absolute position on the page
-        clip_x = frame_left + bl + rect['x']
-        clip_y = frame_top + bt + rect['y']
+        # Compute absolute CSS pixel position on the page
+        abs_x = frame_left + bl + rect['x']
+        abs_y = frame_top + bt + rect['y']
 
-        # Query device pixel ratio to handle non-default zoom/scale-factor
-        # When --force-device-scale-factor=0.5 or zoom is 50%, dpr will be < 1
-        # We use scale = 1/dpr to ensure the screenshot renders at full resolution
-        try:
-            dpr = self.page.tab._run_js('return window.devicePixelRatio;')
-            if not dpr or dpr <= 0:
-                dpr = 1.0
-        except Exception:
-            dpr = 1.0
-
-        capture_scale = 1.0 / dpr
-
-        # Capture from top-level tab (Page.captureScreenshot requires top-level target)
-        data = self.page.tab._run_cdp(
-            'Page.captureScreenshot',
-            format='png',
-            clip={
-                'x': clip_x,
-                'y': clip_y,
-                'width': rect['width'],
-                'height': rect['height'],
-                'scale': capture_scale,
-            }
+        # Convert CSS coords to image pixel coords
+        crop_box = (
+            max(0, int(abs_x * ratio_x)),
+            max(0, int(abs_y * ratio_y)),
+            min(img_w, int((abs_x + rect['width']) * ratio_x)),
+            min(img_h, int((abs_y + rect['height']) * ratio_y)),
         )
-        img_bytes = base64.b64decode(data['data'])
+
+        cropped = full_img.crop(crop_box)
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
-        save_path.write_bytes(img_bytes)
+        cropped.save(str(save_path))
         return save_path
 
 
