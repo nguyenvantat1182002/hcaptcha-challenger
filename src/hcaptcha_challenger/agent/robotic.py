@@ -138,7 +138,8 @@ class RoboticArm:
         1. Gets element rect via JS getBoundingClientRect() (iframe-relative)
         2. Gets iframe position on page via frame_ele.rect.viewport_location
         3. Adds iframe border offsets for accurate absolute coordinates
-        4. Captures from top-level tab with clip at the computed absolute position
+        4. Queries devicePixelRatio to compensate for non-default zoom/scale-factor
+        5. Captures from top-level tab with clip at the computed absolute position
         """
         # Scroll element into view within the iframe
         element._run_js('this.scrollIntoView({block: "center"});')
@@ -160,11 +161,18 @@ class RoboticArm:
         clip_x = frame_left + bl + rect['x']
         clip_y = frame_top + bt + rect['y']
 
-        # Get actual device pixel ratio (needed for correct CDP clipping scaling)
-        dpr = self.page.tab._run_js('return window.devicePixelRatio;')
-        if self._debug:
-            logger.debug(f"Screenshot alignment: DPR={dpr}, Clip=({clip_x}, {clip_y}), Size={rect['width']}x{rect['height']}")
-        
+        # Query device pixel ratio to handle non-default zoom/scale-factor
+        # When --force-device-scale-factor=0.5 or zoom is 50%, dpr will be < 1
+        # We use scale = 1/dpr to ensure the screenshot renders at full resolution
+        try:
+            dpr = self.page.tab._run_js('return window.devicePixelRatio;')
+            if not dpr or dpr <= 0:
+                dpr = 1.0
+        except Exception:
+            dpr = 1.0
+
+        capture_scale = 1.0 / dpr
+
         # Capture from top-level tab (Page.captureScreenshot requires top-level target)
         data = self.page.tab._run_cdp(
             'Page.captureScreenshot',
@@ -174,7 +182,7 @@ class RoboticArm:
                 'y': clip_y,
                 'width': rect['width'],
                 'height': rect['height'],
-                'scale': dpr
+                'scale': capture_scale,
             }
         )
         img_bytes = base64.b64decode(data['data'])
