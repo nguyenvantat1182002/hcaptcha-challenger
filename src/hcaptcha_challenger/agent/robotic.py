@@ -138,7 +138,8 @@ class RoboticArm:
         1. Gets element rect via JS getBoundingClientRect() (iframe-relative)
         2. Gets iframe position on page via frame_ele.rect.viewport_location
         3. Adds iframe border offsets for accurate absolute coordinates
-        4. Captures from top-level tab with clip at the computed absolute position
+        4. Queries devicePixelRatio to handle custom DPI scaling
+        5. Captures from top-level tab with clip at the computed absolute position
         """
         # Scroll element into view within the iframe
         element._run_js('this.scrollIntoView({block: "center"});')
@@ -156,15 +157,22 @@ class RoboticArm:
         except (ValueError, AttributeError):
             bt, bl = 0, 0
 
-        # Compute absolute position on the page
+        # Compute absolute position on the page (CSS pixels)
         clip_x = frame_left + bl + rect['x']
         clip_y = frame_top + bt + rect['y']
+        clip_w = rect['width']
+        clip_h = rect['height']
+
+        # Query devicePixelRatio to handle custom DPI scaling
+        # (e.g., --force-device-scale-factor=0.5)
+        dpr = self.page.tab._run_js('return window.devicePixelRatio;') or 1.0
 
         # Capture from top-level tab (Page.captureScreenshot requires top-level target)
+        # CDP clip uses device-independent (CSS) pixels, but scale param controls output resolution
         data = self.page.tab._run_cdp(
             'Page.captureScreenshot',
             format='png',
-            clip={'x': clip_x, 'y': clip_y, 'width': rect['width'], 'height': rect['height'], 'scale': 1}
+            clip={'x': clip_x, 'y': clip_y, 'width': clip_w, 'height': clip_h, 'scale': dpr}
         )
         img_bytes = base64.b64decode(data['data'])
 
