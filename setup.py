@@ -28,6 +28,7 @@ setup(
         "pydantic-settings>=2.12.0",
         "drissionpage>=4.1.1.2",
         "humancursor>=1.1.5",
+        "pyyaml>=6.0.3",
     ],
     # extras_require={
     #     "server": ["fastapi[all]>=0.115.12"],
