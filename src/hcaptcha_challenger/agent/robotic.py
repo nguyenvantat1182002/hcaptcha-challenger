@@ -156,25 +156,33 @@ class RoboticArm:
         except (ValueError, AttributeError):
             bt, bl = 0, 0
 
-        # Compute absolute position on the page in logical pixels
-        lx = frame_left + bl + rect['x']
-        ly = frame_top + bt + rect['y']
-        lw = rect['width']
-        lh = rect['height']
-
-        # Get device pixel ratio to handle high-DPI or forced scale factors
+        # Get device pixel ratio
         dpr = self.page._run_js('return window.devicePixelRatio;')
 
-        # Page.captureScreenshot 'clip' coordinates often need scaling by dpr 
-        # when a forced device scale factor is active.
+        # Compute absolute position and size
+        # If multiplication (* dpr) moved content to bottom-right (meaning clip origin was too small),
+        # we try division (/ dpr) to shift the clip origin further and capture the correct area.
+        if dpr != 1.0:
+            scale_factor = 1 / dpr
+            lx = (frame_left + bl + rect['x']) * scale_factor
+            ly = (frame_top + bt + rect['y']) * scale_factor
+            lw = rect['width'] * scale_factor
+            lh = rect['height'] * scale_factor
+        else:
+            lx = frame_left + bl + rect['x']
+            ly = frame_top + bt + rect['y']
+            lw = rect['width']
+            lh = rect['height']
+
+        # Capture from top-level tab
         data = self.page.tab._run_cdp(
             'Page.captureScreenshot',
             format='png',
             clip={
-                'x': lx * dpr,
-                'y': ly * dpr,
-                'width': lw * dpr,
-                'height': lh * dpr,
+                'x': lx,
+                'y': ly,
+                'width': lw,
+                'height': lh,
                 'scale': 1
             }
         )
