@@ -93,6 +93,12 @@ class AgentConfig(BaseSettings):
         description="For the challenge type: `image_drag_drop` (single/multi)",
     )
 
+    MODEL_OVERRIDES: dict[str, str] = Field(
+        default_factory=dict,
+        description="Dynamically override models based on ChallengeTypeEnum string value. "
+        "e.g. {'image_drag_single': 'gemini-2.5-flash'}"
+    )
+
     coordinate_grid: CoordinateGrid | None = Field(default_factory=CoordinateGrid)
 
     enable_challenger_debug: bool | None = Field(default=False, description="Enable debug mode")

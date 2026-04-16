@@ -10,7 +10,7 @@ import asyncio
 import json
 import msgpack
 
-from queue import Queue, Empty
+from queue import Queue
 from datetime import datetime
 from typing import List
 from loguru import logger

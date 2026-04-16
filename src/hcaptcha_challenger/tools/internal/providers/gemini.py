@@ -75,11 +75,11 @@ class GeminiProvider:
         """Convert uploaded files to parts."""
         return [types.Part.from_uri(file_uri=f.uri, mime_type=f.mime_type) for f in files]
 
-    def _set_thinking_config(self, config: types.GenerateContentConfig) -> None:
+    def _set_thinking_config(self, config: types.GenerateContentConfig, model: str) -> None:
         """Configure thinking settings based on model capabilities."""
         config.thinking_config = types.ThinkingConfig(include_thoughts=True)
 
-        if self._model in THINKING_LEVEL_MODELS:
+        if model in THINKING_LEVEL_MODELS:
             thinking_level = types.ThinkingLevel.HIGH
 
             config.thinking_config = types.ThinkingConfig(
@@ -134,13 +134,15 @@ class GeminiProvider:
             response_schema=response_schema,
         )
 
+        actual_model = kwargs.pop("model", self._model)
+
         # Set thinking config if applicable
-        self._set_thinking_config(config=config)
+        self._set_thinking_config(config=config, model=actual_model)
 
         # Generate response (sync)
         self._response: types.GenerateContentResponse = (
             self.client.models.generate_content(
-                model=self._model, contents=contents, config=config
+                model=actual_model, contents=contents, config=config
             )
         )
 

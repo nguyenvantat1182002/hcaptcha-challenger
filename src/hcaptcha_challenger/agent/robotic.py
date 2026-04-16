@@ -412,10 +412,15 @@ class RoboticArm:
 
             user_prompt = self._match_user_prompt(job_type)
 
+            kwargs = {}
+            if job_type.value in self.config.MODEL_OVERRIDES:
+                kwargs["model"] = self.config.MODEL_OVERRIDES[job_type.value]
+
             response = self._spatial_path_reasoner(
                 challenge_screenshot=raw,
                 grid_divisions=projection,
                 auxiliary_information=user_prompt,
+                **kwargs,
             )
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
             self._spatial_path_reasoner.cache_response(
@@ -451,10 +456,15 @@ class RoboticArm:
 
             user_prompt = self._match_user_prompt(job_type)
 
+            kwargs = {}
+            if job_type.value in self.config.MODEL_OVERRIDES:
+                kwargs["model"] = self.config.MODEL_OVERRIDES[job_type.value]
+
             response = self._spatial_point_reasoner(
                 challenge_screenshot=raw,
                 grid_divisions=projection,
                 auxiliary_information=user_prompt,
+                **kwargs,
             )
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
             self._spatial_point_reasoner.cache_response(

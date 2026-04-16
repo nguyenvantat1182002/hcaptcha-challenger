@@ -1,9 +1,9 @@
 from DrissionPage import ChromiumPage, ChromiumOptions
 from hcaptcha_challenger import AgentV, AgentConfig
 
-opts = ChromiumOptions()
-page = ChromiumPage(addr_or_opts=opts)
 
+opts = ChromiumOptions().auto_port()
+page = ChromiumPage(addr_or_opts=opts)
 
 page.get('https://account.riotgames.com/')
 
@@ -15,3 +15,5 @@ agent = AgentV(frame, config)
 agent.wait_for_challenge()
 
 input('Continue')
+
+page.quit(del_data=True)
