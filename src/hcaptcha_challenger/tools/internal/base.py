@@ -20,7 +20,7 @@ from typing import Generic, TypeVar, Union
 from loguru import logger
 from pydantic import BaseModel
 
-from .providers.gemini import GeminiProvider
+from .providers.openrouter import OpenRouterProvider
 from .providers.protocol import ChatProvider
 
 ModelT = TypeVar("ModelT", bound=str)
@@ -45,7 +45,7 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
 
     def __init__(
         self,
-        gemini_api_key: str,
+        openrouter_api_key: str,
         model: ModelT | None = None,
         *,
         provider: ChatProvider | None = None,
@@ -55,19 +55,19 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
         Initialize the reasoner.
 
         Args:
-            gemini_api_key: Gemini API key (used if no custom provider is set).
+            openrouter_api_key: OpenRouter API key (used if no custom provider is set).
             model: Model name to use.
             provider: Optional custom provider (for extensibility).
             **kwargs: Additional options for subclasses.
         """
-        self._api_key = gemini_api_key
+        self._api_key = openrouter_api_key
         self._model = model
         self._provider: ChatProvider = provider or self._create_default_provider()
         self._response = None
 
-    def _create_default_provider(self) -> GeminiProvider:
-        """Create the default Gemini provider."""
-        return GeminiProvider(api_key=self._api_key, model=self._model)
+    def _create_default_provider(self) -> OpenRouterProvider:
+        """Create the default OpenRouter provider."""
+        return OpenRouterProvider(api_key=self._api_key, model=self._model)
 
     @abstractmethod
     async def __call__(self, *args, **kwargs) -> ResponseT:

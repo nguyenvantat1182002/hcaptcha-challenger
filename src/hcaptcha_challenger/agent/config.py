@@ -29,9 +29,9 @@ IGNORE_REQUEST_TYPE_LIST = List[SINGLE_IGNORE_TYPE]
 class AgentConfig(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_ignore_empty=True, extra="ignore")
 
-    GEMINI_API_KEY: SecretStr = Field(
-        default_factory=lambda: SecretStr(os.environ.get("GEMINI_API_KEY", "")),
-        description="Create API Key https://aistudio.google.com/app/apikey",
+    OPENROUTER_API_KEY: SecretStr = Field(
+        default_factory=lambda: SecretStr(os.environ.get("OPENROUTER_API_KEY", "")),
+        description="Create API Key https://openrouter.ai/settings/keys",
     )
 
     cache_dir: Path = Path("tmp/.cache")
@@ -115,11 +115,11 @@ class AgentConfig(BaseSettings):
     )
     skills_update_branch: str = Field(default="main", description="GitHub branch for skills update")
 
-    @field_validator('GEMINI_API_KEY', mode="before")
+    @field_validator('OPENROUTER_API_KEY', mode="before")
     @classmethod
     def validate_api_key(cls, v: Any) -> str:
         """
-        Validates that the GEMINI_API_KEY is not empty.
+        Validates that the OPENROUTER_API_KEY is not empty.
 
         Args:
             v: The API key value to validate
@@ -132,9 +132,9 @@ class AgentConfig(BaseSettings):
         """
         if not v or not isinstance(v, str):
             raise ValueError(
-                "GEMINI_API_KEY is required but not provided. "
-                "Please either pass it directly or set the GEMINI_API_KEY environment variable."
-                "Create API Key -> https://aistudio.google.com/app/apikey"
+                "OPENROUTER_API_KEY is required but not provided. "
+                "Please either pass it directly or set the OPENROUTER_API_KEY environment variable."
+                "Create API Key -> https://openrouter.ai/settings/keys"
             )
         return v
 

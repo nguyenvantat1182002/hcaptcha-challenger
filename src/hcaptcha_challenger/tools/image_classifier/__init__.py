@@ -34,13 +34,13 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
 
     def __init__(
         self,
-        gemini_api_key: str,
+        openrouter_api_key: str,
         model: SCoTModelType = DEFAULT_SCOT_MODEL,
         *,
         provider: ChatProvider | None = None,
         **kwargs,
     ):
-        super().__init__(gemini_api_key, model, provider=provider, **kwargs)
+        super().__init__(openrouter_api_key, model, provider=provider, **kwargs)
 
     def __call__(
         self, *, challenge_screenshot: Union[str, Path], **kwargs

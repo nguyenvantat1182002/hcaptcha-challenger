@@ -106,19 +106,19 @@ class RoboticArm:
         self._raw_mouse = DrissionPageMouse(page)
 
         self._challenge_router = ChallengeRouter(
-            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
+            openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.CHALLENGE_CLASSIFIER_MODEL,
         )
         self._image_classifier = ImageClassifier(
-            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
+            openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.IMAGE_CLASSIFIER_MODEL,
         )
         self._spatial_path_reasoner = SpatialPathReasoner(
-            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
+            openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.SPATIAL_PATH_REASONER_MODEL,
         )
         self._spatial_point_reasoner = SpatialPointReasoner(
-            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
+            openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.SPATIAL_POINT_REASONER_MODEL,
         )
         self._skill_manager = SkillManager(agent_config=config)

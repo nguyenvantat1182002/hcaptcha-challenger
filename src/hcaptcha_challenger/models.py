@@ -259,7 +259,7 @@ SCoTModelType = Union[
     ],
 ]
 
-DEFAULT_SCOT_MODEL: SCoTModelType = "gemini-2.5-pro"
+DEFAULT_SCOT_MODEL: SCoTModelType = "google/gemini-2.5-pro"
 
 FastShotModelType = Union[
     str,
@@ -271,7 +271,7 @@ FastShotModelType = Union[
     ],
 ]
 
-DEFAULT_FAST_SHOT_MODEL: FastShotModelType = "gemini-2.5-flash"
+DEFAULT_FAST_SHOT_MODEL: FastShotModelType = "google/gemini-2.5-flash"
 
 THINKING_BUDGET_MODELS: List[Union[SCoTModelType, FastShotModelType]] = [
     "gemini-2.5-flash",
