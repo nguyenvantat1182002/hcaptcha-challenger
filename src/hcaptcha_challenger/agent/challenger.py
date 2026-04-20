@@ -124,6 +124,8 @@ class AgentV:
                     )
 
             logger.warning(f"Unknown request_type: {request_type=}")
+
+            return None
         except Exception as err:
             logger.error(f"Error parsing challenge type: {err}")
 
