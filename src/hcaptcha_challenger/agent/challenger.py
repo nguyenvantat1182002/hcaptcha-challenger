@@ -134,6 +134,8 @@ class AgentV:
 
     def _solve_captcha(self) -> ChallengeSignal:
         challenge_type = self._review_challenge_type()
+        if not challenge_type:
+            return True
         logger.debug(f"Start Challenge - type={challenge_type.value} count={self.robotic_arm.signal_crumb_count}")
         
         # {{< Skip specific challenge questions >}}
