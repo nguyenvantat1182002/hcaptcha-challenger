@@ -6,11 +6,10 @@
 
 import time
 import threading
-import asyncio
 import json
 import msgpack
 
-from queue import Queue
+from queue import Queue, Empty
 from datetime import datetime
 from typing import List
 from loguru import logger
@@ -87,7 +86,7 @@ class AgentV:
         try:
             self._captcha_payload = self._captcha_payload_queue.get(timeout=30)
             self.page.wait(0.5)
-        except asyncio.TimeoutError:
+        except Empty:
             logger.error("Wait for captcha payload to timeout")
             self._captcha_payload = None
 
@@ -190,8 +189,7 @@ class AgentV:
         # ----------------------------------------------------------------------
         if self._captcha_response_queue.empty():
             result = self._solve_captcha()
-            logger.debug(f"Result: {result}")
-
+            
             if result is None:
                 return ChallengeSignal.SUCCESS
             elif not result:
