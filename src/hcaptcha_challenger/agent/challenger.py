@@ -50,7 +50,7 @@ class AgentV:
     def _cache_validated_captcha_response(self, cr: CaptchaResponse):
         if not cr.is_pass:
             return
-
+            
         self.cr_list.append(cr)
 
         try:
@@ -92,15 +92,22 @@ class AgentV:
                 self._captcha_response_queue.put_nowait(CaptchaResponse(**metadata))
                 
     def _review_challenge_type(self) -> RequestType | ChallengeTypeEnum:
-        try:
+        end_time = time.monotonic() + 30
+
+        while 1:
             if self.is_rate_limited:
                 raise HCaptchaBlockedError
-                
-            self._captcha_payload = self._captcha_payload_queue.get(timeout=30)
-            self.page.wait(0.5)
-        except Empty:
-            logger.error("Wait for captcha payload to timeout")
-            self._captcha_payload = None
+
+            try:
+                self._captcha_payload = self._captcha_payload_queue.get_nowait()
+                break
+            except Empty:
+                if time.monotonic() > end_time:
+                    logger.error("Wait for captcha payload to timeout")
+                    self._captcha_payload = None
+                    break
+
+        self.page.wait(0.5)
 
         self.robotic_arm.signal_crumb_count = None
         self.robotic_arm.captcha_payload = None
