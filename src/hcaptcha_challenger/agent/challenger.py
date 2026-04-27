@@ -26,6 +26,10 @@ from hcaptcha_challenger.models import (
 )
 
 
+class HCaptchaBlockedError(Exception):
+    pass
+
+
 class AgentV:
     def __init__(self, page: ChromiumFrame, agent_config: AgentConfig):
         self.page = page
@@ -89,6 +93,9 @@ class AgentV:
                 
     def _review_challenge_type(self) -> RequestType | ChallengeTypeEnum:
         try:
+            if self.is_rate_limited:
+                raise HCaptchaBlockedError
+                
             self._captcha_payload = self._captcha_payload_queue.get(timeout=30)
             self.page.wait(0.5)
         except Empty:
