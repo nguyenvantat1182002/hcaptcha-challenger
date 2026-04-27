@@ -37,6 +37,8 @@ class AgentV:
         self._captcha_payload_queue: Queue[CaptchaPayload | None] = Queue()
         self._captcha_response_queue: Queue[CaptchaResponse] = Queue()
         self.cr_list: List[CaptchaResponse] = []
+
+        self.is_rate_limited = False
         
         self.page.listen.start(['/getcaptcha', '/checkcaptcha'])
         threading.Thread(target=self._task_handler, daemon=True).start()
@@ -60,24 +62,27 @@ class AgentV:
     def _task_handler(self):
         for packet in self.page.listen.steps():
             if '/getcaptcha' in packet.url:
-                result = self.page.run_js(f"""
-                    async function() {{
-                        const byteArray = new Uint8Array({list(packet.response.body)});
-                        console.log('Data has been converted to Uint8Array, length:', byteArray.length);
+                if packet.response.extra_info.all_info['statusCode'] == 200:
+                    result = self.page.run_js(f"""
+                        async function() {{
+                            const byteArray = new Uint8Array({list(packet.response.body)});
+                            console.log('Data has been converted to Uint8Array, length:', byteArray.length);
 
-                        try {{
-                            const hswResult = await hsw(0, byteArray);
-                            return Array.from(hswResult);
-                        }} catch (e) {{
-                            return {{error: e.toString()}};
+                            try {{
+                                const hswResult = await hsw(0, byteArray);
+                                return Array.from(hswResult);
+                            }} catch (e) {{
+                                return {{error: e.toString()}};
+                            }}
                         }}
-                    }}
-                """)
+                    """)
 
-                unpacked_data = msgpack.unpackb(bytes(result))
-                captcha_payload = CaptchaPayload(**unpacked_data)
+                    unpacked_data = msgpack.unpackb(bytes(result))
+                    captcha_payload = CaptchaPayload(**unpacked_data)
 
-                self._captcha_payload_queue.put_nowait(captcha_payload)
+                    self._captcha_payload_queue.put_nowait(captcha_payload)
+                else:
+                    self.is_rate_limited = True
             elif '/checkcaptcha' in packet.url:
                 metadata = packet.response.body
                 self._captcha_response_queue.put_nowait(CaptchaResponse(**metadata))
