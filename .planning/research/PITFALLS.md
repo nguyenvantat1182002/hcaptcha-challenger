@@ -1,119 +1,246 @@
-# Pitfalls Research
+# Domain Pitfalls
 
-**Domain:** HumanCursor-style cursor migration for browser captcha automation
+**Domain:** Cursor movement algorithm migration (legacy human-like -> HumanCursor-style in browser automation)
 **Researched:** 2026-04-30
-**Confidence:** MEDIUM
+**Confidence:** MEDIUM-HIGH
 
 ## Critical Pitfalls
 
-### Pitfall 1: Breaking Existing Movement API Contracts
+### Pitfall 1: Swapping motion math without parity baselines
 
 **What goes wrong:**
-Existing solver call sites fail or silently change behavior after migration.
+The team replaces the cursor path generator, but solver success drops because movement timing/event cadence no longer matches production expectations.
 
 **Why it happens:**
-Teams optimize for new engine design and underweight backward compatibility.
+Migration is treated as "implementation detail" and not as a measurable behavior contract (path shape, move duration, event count, click latency, target hit rate).
 
 **How to avoid:**
-Introduce compatibility adapter first; enforce contract tests before swapping internals.
+Before replacing logic, lock a baseline from current production runs:
+- movement distribution metrics (distance, duration, velocity variance, overshoot frequency)
+- DOM event metrics (`mousemove` count per action, pre-click hover delay)
+- outcome metrics (challenge completion rate, retry rate, timeout rate)
+Gate rollout on "no regression" thresholds.
 
 **Warning signs:**
-Large diffs in `robotic.py` call signatures and fixture updates touching many unrelated tests.
+- More "missed click" or "re-click" behavior in challenge flow
+- Increased timeout/retry rate in `robotic` execution
+- Telemetry shows lower `mousemove` counts per interaction after migration
 
 **Phase to address:**
-Phase 1 (engine scaffold + compatibility bridge).
+Phase 1 - Baseline capture and quantitative parity benchmarks.
 
 ---
 
-### Pitfall 2: Non-Deterministic Regression Testing
+### Pitfall 2: Relying on framework-native interpolation as "human-like"
 
 **What goes wrong:**
-CI failures are flaky and movement quality regressions cannot be reproduced.
+Migration uses built-in mouse interpolation (`steps`) and assumes that is sufficient; resulting movement is still overly linear/mechanical.
 
 **Why it happens:**
-Random perturbations are introduced without seed control or benchmark baselines.
+`mouse.move()` interpolation is easy and appears smooth visually, but does not automatically model realistic acceleration/deceleration, jitter, overshoot, and correction behavior.
 
 **How to avoid:**
-Add deterministic mode with explicit seeds and parity metric snapshots.
+Implement an explicit movement profile layer:
+- path generation (Bezier/curved path)
+- timing profile (non-uniform delays, not fixed intervals)
+- optional overshoot + settle for long moves
+- bounded micro-jitter and hover dwell before click
+Keep this in one adapter/service so orchestration can switch profiles safely.
 
 **Warning signs:**
-Intermittent parity-score drift across identical commits.
+- Cursor traces look smooth but too "perfect"
+- Movement duration tightly correlated only to distance with little variance
+- Event intervals nearly constant across runs
 
 **Phase to address:**
-Phase 2 (benchmarking and validation).
+Phase 2 - HumanCursor-style adapter and movement profile implementation.
 
 ---
 
-### Pitfall 3: Overfitting to a Single Demo Pattern
+### Pitfall 3: Breaking event semantics during click/hover migration
 
 **What goes wrong:**
-Algorithm appears good in one scenario but fails across target distances, element sizes, and drag paths.
+Cursor reaches target but expected event sequence differs, causing subtle interaction failures in hCaptcha widgets.
 
 **Why it happens:**
-Validation dataset is too narrow and lacks edge-case coverage.
+Developers focus on final coordinates, not full interaction semantics (`mousemove` cadence, hover before click, down/up timing, scroll interactions).
 
 **How to avoid:**
-Build benchmark matrix (short/long moves, diagonal, drag, constrained targets).
+Define an interaction contract test suite:
+- move -> hover dwell -> down -> up -> click
+- drag/drop and scroll path behaviors
+- assertions on event sequence/order for critical widget actions
+Run contract tests in CI against supported browser backends.
 
 **Warning signs:**
-Good average score with poor percentile tails in specific motion classes.
+- Flaky widget interaction despite "correct" coordinates
+- Hover-triggered UI states not activating reliably
+- More nondeterministic failures in end-to-end tests
 
 **Phase to address:**
-Phase 2 and Phase 3 (integration hardening).
+Phase 3 - Interaction contract tests and cross-browser behavior verification.
+
+---
+
+### Pitfall 4: Coordinate drift under dynamic layout and viewport changes
+
+**What goes wrong:**
+HumanCursor-style movement targets stale coordinates and misses due to layout shifts, frame changes, scroll changes, or sticky overlays.
+
+**Why it happens:**
+Algorithm migration is done independently from target acquisition and revalidation logic.
+
+**How to avoid:**
+Use "locate-then-move" with pre-click validation:
+- recompute element box immediately before movement execution
+- revalidate visibility/intersection after scroll
+- clamp to viewport and replan path when target moves
+- fail fast with retry strategy on stale geometry
+
+**Warning signs:**
+- Clicks land near element edges or under overlays
+- Failures spike on responsive pages/slow networks
+- Retries succeed without algorithm changes (indicates stale target state)
+
+**Phase to address:**
+Phase 2 - Movement adapter integration with robust target revalidation.
+
+---
+
+### Pitfall 5: Ignoring existing fragile boundaries in orchestration layer
+
+**What goes wrong:**
+Cursor migration introduces regressions in already fragile classes (`robotic`/`challenger`) and private browser APIs.
+
+**Why it happens:**
+New movement logic is embedded directly into large cross-cutting classes instead of isolated behind an adapter boundary.
+
+**How to avoid:**
+Refactor before deep migration:
+- isolate browser mouse primitives behind a compatibility adapter
+- keep movement engine pure/testable (no direct page/frame side effects)
+- add thin orchestration hooks rather than rewriting challenge lifecycle code
+
+**Warning signs:**
+- Large diff in `agent/robotic.py` touching unrelated logic
+- Increased dependency on private browser internals during migration
+- Bug fixes require editing multiple orchestration hotspots
+
+**Phase to address:**
+Phase 0 - Refactor safety boundaries (adapter extraction) before algorithm swap.
+
+---
+
+### Pitfall 6: Throughput collapse from realistic movement everywhere
+
+**What goes wrong:**
+Automation becomes "more human" but total run time/cost increases enough to hurt production throughput.
+
+**Why it happens:**
+Human-like movement is applied to every minor interaction instead of high-risk interactions only.
+
+**How to avoid:**
+Adopt selective realism policy:
+- high-fidelity movement for challenge-critical actions
+- lightweight movement for low-risk navigation
+- configurable profile levels (strict/balanced/fast)
+- monitor solve-time SLOs and per-challenge cost ceilings
+
+**Warning signs:**
+- Challenge solve time increases sharply after rollout
+- Queue depth or worker saturation increases under same traffic
+- Cost per successful solve trends upward
+
+**Phase to address:**
+Phase 4 - Performance tuning and policy controls.
+
+---
+
+### Pitfall 7: Over-claiming HumanCursor as full anti-bot solution
+
+**What goes wrong:**
+Migration is considered complete while fingerprinting/IP/challenge defenses still block flows.
+
+**Why it happens:**
+Mouse movement improvements are conflated with complete anti-detection coverage.
+
+**How to avoid:**
+Keep threat model explicit in roadmap:
+- movement behavior is one signal only
+- continue independent controls for browser fingerprinting, request patterns, and network reputation
+- evaluate success on end-to-end solve outcomes, not cursor realism alone
+
+**Warning signs:**
+- Cursor telemetry improves but challenge pass rate does not
+- Block pages remain correlated with network/session fingerprints
+- Team discussions frame cursor migration as "final stealth fix"
+
+**Phase to address:**
+Phase 5 - End-to-end validation with layered detection signals.
 
 ## Technical Debt Patterns
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Inline curve math in orchestrator | Faster initial patch | Hard debugging and code coupling | Never for this migration. |
-| Skip profile schema typing | Less boilerplate | Hidden behavior drift and config bugs | Only for throwaway spikes. |
-| No benchmark threshold gates | Faster merge cycle | Silent quality degradation | Never once migration starts. |
+| Embed movement logic directly in `robotic` methods | Faster initial implementation | Hard-to-test orchestration; regression-prone diffs | Never (for this migration) |
+| Hardcode jitter/overshoot constants globally | Quick tuning | No environment-specific control; unstable behavior across targets | Only temporary behind feature flag |
+| Keep legacy and new engines without shared interface | Low refactor effort | Dual maintenance and inconsistent behavior contracts | Only during short A/B rollout window |
 
 ## Integration Gotchas
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| DrissionPage/Playwright actions | Sending too many micro-steps with inconsistent timing | Use bounded step count + calibrated delays. |
-| Existing retry logic | Reusing old retries without motion-state awareness | Reset/adapt movement profile on retry attempts. |
-| CLI config | Hardcoding behavior with no explicit flags | Expose profile + deterministic toggles in config. |
+| Playwright mouse API | Assuming `steps` interpolation is sufficient for realism | Generate explicit intermediate points + timing profile, then call `mouse.move` per point |
+| hCaptcha interaction flow | Asserting final click location only | Assert full interaction sequence and challenge outcome metrics |
+| Browser backend compatibility | Assuming same movement behavior across engines | Define supported browser matrix and run parity checks per backend |
 
 ## Performance Traps
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Excessive path points | Slow interaction and timeouts | Dynamic sampling by distance and complexity | Frequent long-distance moves. |
-| Heavy per-move allocations | CPU spikes in batch runs | Preallocate arrays and reuse profile objects | Medium/high concurrency. |
-| Benchmark on every runtime action | Throughput collapse | Gate full metrics to test/diagnostic mode | Production solver loops. |
+| High-fidelity movement on all actions | Solve duration spikes and worker backlog grows | Selective realism policy by interaction type | Medium/high traffic with concurrent sessions |
+| Per-step sleep without bounded profile | Large variance in completion times | Use bounded timing envelopes and SLO checks | CI and production under noisy runtime |
+| Recomputing heavy path logic repeatedly | CPU overhead in hot loops | Cache/reuse path primitives where safe | Multi-session execution |
 
 ## Security Mistakes
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Enabling aggressive anti-bot heuristics by default | Policy/legal exposure | Keep scope to realistic motion for stability/testing. |
-| Logging raw challenge metadata excessively | Sensitive telemetry leakage | Minimize logs and redact identifiers. |
-| External fetches during movement runtime | Supply-chain/runtime variability | Vendor/pin dependencies and keep runtime deterministic. |
+| Treating cursor realism as anti-bot completeness | False confidence; unresolved detection vectors | Keep layered defenses and independent telemetry for each vector |
+| Injecting debug cursor overlays in production runs | Leaks deterministic automation artifacts | Restrict debug visualization to local/test mode |
+| Expanding JS injection surface for movement hooks without review | New script execution risk in challenge pages | Keep injection minimal and reviewed, with strict gating flags |
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Compatibility:** Old API call signatures still pass contract tests.
-- [ ] **Parity:** Quantitative metrics pass threshold, not just visual checks.
-- [ ] **Stability:** Deterministic mode reproducibly matches baseline.
-- [ ] **Integration:** Full challenge solve path validated, not isolated movement unit only.
+- [ ] **Parity:** Movement "looks human" in videos, but quantitative parity thresholds are not defined or enforced.
+- [ ] **Reliability:** Happy-path tests pass, but retry/timeout/error-rate regression is not compared against baseline.
+- [ ] **Compatibility:** Primary browser works, but supported browser matrix is not validated.
+- [ ] **Performance:** Behavior improved, but throughput/cost SLOs were not re-verified.
+- [ ] **Scope control:** Team assumes anti-bot problem solved without validating non-cursor detection signals.
 
 ## Pitfall-to-Phase Mapping
 
 | Pitfall | Prevention Phase | Verification |
 |---------|------------------|--------------|
-| API contract breakage | Phase 1 | Compatibility test suite all green. |
-| Flaky/non-deterministic validation | Phase 2 | Seeded benchmark run stable across CI reruns. |
-| Overfit trajectory model | Phase 3 | Benchmark matrix percentiles meet thresholds. |
+| No parity baselines | Phase 1 - Baseline & benchmarks | Baseline dashboard + regression gates merged |
+| Native interpolation mistaken for realism | Phase 2 - Movement profile engine | Path/timing tests prove non-linear variable profile |
+| Event semantics drift | Phase 3 - Contract tests | Event-order assertions pass on critical flows |
+| Coordinate drift on dynamic UI | Phase 2 - Target revalidation integration | Miss-click and stale-target failures reduced |
+| Fragile orchestration coupling | Phase 0 - Adapter extraction | Movement engine can be unit-tested without browser |
+| Throughput collapse | Phase 4 - Performance policy tuning | Solve-time SLO and queue metrics within thresholds |
+| Over-claiming anti-bot coverage | Phase 5 - End-to-end validation | Solve outcomes validated across cursor + non-cursor signals |
 
 ## Sources
 
-- `.planning/codebase/CONCERNS.md`
-- `.planning/codebase/ARCHITECTURE.md`
-- HumanCursor reference: [riflosnake/HumanCursor](https://github.com/riflosnake/HumanCursor)
+- Playwright Mouse API (official docs, HIGH): https://playwright.dev/docs/api/class-mouse
+- MDN `mousemove` event semantics (official docs, HIGH): https://developer.mozilla.org/en-US/docs/Web/API/Element/mousemove_event
+- HumanCursor package documentation (official package docs, HIGH): https://pypi.org/project/HumanCursor/
+- HumanCursor repository (official project source, MEDIUM): https://github.com/riflosnake/HumanCursor
+- Community implementation patterns and failure discussions (Web research, LOW-MEDIUM; validate in phase execution):
+  - https://bytetunnels.com/posts/browser-automation-human-like-mouse-movement/
+  - https://substack.thewebscraping.club/p/bypass-datadome-mouse-movements-in-playwright
+  - https://www.zenrows.com/blog/humancursor
 
 ---
-*Pitfalls research for: cursor movement migration*
+*Pitfalls research for: cursor movement migration in hcaptcha-challenger*
 *Researched: 2026-04-30*
