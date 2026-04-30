@@ -75,30 +75,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MOTN-01 | TBC | Pending |
-| MOTN-02 | TBC | Pending |
-| MOTN-03 | TBC | Pending |
-| ACTN-01 | TBC | Pending |
-| ACTN-02 | TBC | Pending |
-| ACTN-03 | TBC | Pending |
-| ACTN-04 | TBC | Pending |
-| COMP-01 | TBC | Pending |
-| COMP-02 | TBC | Pending |
-| COMP-03 | TBC | Pending |
-| COMP-04 | TBC | Pending |
-| TELE-01 | TBC | Pending |
-| TELE-02 | TBC | Pending |
-| TELE-03 | TBC | Pending |
-| BENC-01 | TBC | Pending |
-| BENC-02 | TBC | Pending |
-| BENC-03 | TBC | Pending |
-| BENC-04 | TBC | Pending |
+| MOTN-01 | Phase 2 | Pending |
+| MOTN-02 | Phase 2 | Pending |
+| MOTN-03 | Phase 2 | Pending |
+| ACTN-01 | Phase 3 | Pending |
+| ACTN-02 | Phase 3 | Pending |
+| ACTN-03 | Phase 3 | Pending |
+| ACTN-04 | Phase 3 | Pending |
+| COMP-01 | Phase 1 | Pending |
+| COMP-02 | Phase 2 | Pending |
+| COMP-03 | Phase 4 | Pending |
+| COMP-04 | Phase 2 | Pending |
+| TELE-01 | Phase 1 | Pending |
+| TELE-02 | Phase 4 | Pending |
+| TELE-03 | Phase 4 | Pending |
+| BENC-01 | Phase 4 | Pending |
+| BENC-02 | Phase 4 | Pending |
+| BENC-03 | Phase 4 | Pending |
+| BENC-04 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 ⚠️
+- Mapped to phases: 18
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-30*
-*Last updated: 2026-04-30 after initial definition*
+*Last updated: 2026-04-30 after roadmap creation*
