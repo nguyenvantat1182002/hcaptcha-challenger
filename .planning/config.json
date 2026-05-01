@@ -1,9 +1,0 @@
-{
-  "workflow": "new-project",
-  "preferences": {
-    "auto_mode": false,
-    "research_enabled": true,
-    "ui_brand": "none"
-  },
-  "project_type": "refactor/integration"
-}
