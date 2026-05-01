@@ -17,6 +17,8 @@ dependencies = [
     "humancursor>=1.1.5",
     "pyyaml>=6.0.3",
     "openai>=2.32.0",
+    "numpy>=2.2.6",
+    "pytweening>=1.2.0",
 ]
 requires-python = ">=3.10"
 authors = [
