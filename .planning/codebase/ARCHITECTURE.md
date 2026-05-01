@@ -1,30 +1,30 @@
-<!-- refreshed: 2026-04-30 -->
+<!-- refreshed: 2025-05-15 -->
 # Architecture
 
-**Analysis Date:** 2026-04-30
+**Analysis Date:** 2025-05-15
 
 ## System Overview
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│                   CLI / Consumer Surface                    │
+│                      Agent Layer                            │
+│           `src/hcaptcha_challenger/agent`                    │
 ├──────────────────┬──────────────────┬───────────────────────┤
-│   Public API     │   Typer CLI      │   Test Harness        │
-│`src/hcaptcha_... │`src/hcaptcha_... │`tests/`               │
-│ __init__.py`     │ cli/main.py`     │                       │
+│    AgentV        │    RoboticArm    │     AgentConfig       │
+│  `challenger.py` │   `robotic.py`   │     `config.py`       │
 └────────┬─────────┴────────┬─────────┴──────────┬────────────┘
          │                  │                     │
          ▼                  ▼                     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                  Agent Orchestration Layer                  │
-│  `src/hcaptcha_challenger/agent/challenger.py`              │
-│  `src/hcaptcha_challenger/agent/robotic.py`                 │
+│                    Reasoning Layer                           │
+│           `src/hcaptcha_challenger/tools`                   │
+│  `ImageClassifier` `SpatialPathReasoner` `ChallengeRouter`   │
 └─────────────────────────────────────────────────────────────┘
-         │
-         ▼
+         │                  │
+         ▼                  ▼
 ┌─────────────────────────────────────────────────────────────┐
-│          Tooling + Provider + External Browser/LLM          │
-│ `src/hcaptcha_challenger/tools/` + OpenRouter + DrissionPage│
+│  Skill Layer (Prompts)     │  Provider Layer (LLM/Vision)   │
+│ `skills/manager.py`        │ `tools/internal/providers`     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -32,151 +32,119 @@
 
 | Component | Responsibility | File |
 |-----------|----------------|------|
-| CLI command router | Entrypoint that mounts `dataset` and `solver` subcommands | `src/hcaptcha_challenger/cli/main.py` |
-| Challenge lifecycle controller | Listens for captcha packets, selects solving strategy, waits for verdict | `src/hcaptcha_challenger/agent/challenger.py` |
-| Browser action executor | Captures challenge screenshots, invokes reasoning tools, performs click/drag actions | `src/hcaptcha_challenger/agent/robotic.py` |
-| Tool facade package | Exposes challenge router, classifier, and spatial reasoners as stable imports | `src/hcaptcha_challenger/tools/__init__.py` |
-| LLM provider adapter | Converts image inputs + schema into OpenRouter API calls and parses typed output | `src/hcaptcha_challenger/tools/internal/providers/openrouter.py` |
-| Domain schema layer | Defines challenge enums, payload/response models, and structured output contracts | `src/hcaptcha_challenger/models.py` |
+| AgentV | Orchestrates the captcha solving workflow, intercepts network traffic, and manages task queues. | `src/hcaptcha_challenger/agent/challenger.py` |
+| RoboticArm | Translates high-level solving decisions into browser actions (clicks, drags) with human-like mouse movements. | `src/hcaptcha_challenger/agent/robotic.py` |
+| Reasoner (Base) | Abstract base class for all reasoning tools, managing prompt loading and provider interaction. | `src/hcaptcha_challenger/tools/internal/base.py` |
+| SkillManager | Manages prompt templates (skills) with layered priority (User > Cache > Built-in) and remote update support. | `src/hcaptcha_challenger/skills/manager.py` |
+| DrissionPageMouse | Adapter bridging high-level mouse trajectories to low-level browser CDP commands. | `src/hcaptcha_challenger/agent/robotic.py` |
+| Models | Centralized data structures and Pydantic schemas for captcha payloads and responses. | `src/hcaptcha_challenger/models.py` |
 
 ## Pattern Overview
 
-**Overall:** Layered orchestration with typed tool adapters.
+**Overall:** Agentic Multimodal Reasoning
 
 **Key Characteristics:**
-- Entry surfaces are thin (`cli`, package exports), with operational logic concentrated in `agent` and `tools`.
-- LLM integrations are wrapped behind typed reasoners (`Reasoner`, `SpatialReasoner`) rather than called directly.
-- Captcha state is treated as typed contracts (`CaptchaPayload`, `CaptchaResponse`, challenge result models).
+- **Asynchronous Interception:** Uses `DrissionPage` to listen for `/getcaptcha` (payload) and `/checkcaptcha` (verification) requests in the background.
+- **Human-like Interaction:** Employs Bezier curve trajectories for mouse movements and randomized delays to bypass anti-bot detections.
+- **Normalized Coordinate Mapping:** Vision models operate on a 0-1000 normalized grid, which is mapped to real viewport coordinates by the `RoboticArm`.
+- **Decoupled Reasoning:** Solvers (Tools) are independent of the browser agent, allowing them to be tested or used in isolation.
 
 ## Layers
 
-**Interface Layer:**
-- Purpose: Accept user/system triggers.
-- Location: `src/hcaptcha_challenger/cli/` and `src/hcaptcha_challenger/__init__.py`
-- Contains: Typer apps, command handlers, public exports.
-- Depends on: `agent`, `tools`, `helper`, `models`.
-- Used by: End users (`hc ...`) and library consumers (`import hcaptcha_challenger`).
+**Agent Layer:**
+- Purpose: Orchestration and browser state management.
+- Location: `src/hcaptcha_challenger/agent`
+- Contains: `AgentV`, `RoboticArm`, `AgentConfig`.
+- Depends on: `Reasoning Layer`, `DrissionPage`.
+- Used by: CLI, external implementations.
 
-**Orchestration Layer:**
-- Purpose: Coordinate browser events, challenge classification, and action execution.
-- Location: `src/hcaptcha_challenger/agent/`
-- Contains: `AgentV`, `RoboticArm`, config, mouse movement logic.
-- Depends on: `models`, `tools`, `skills`, DrissionPage.
-- Used by: CLI and external code that constructs `AgentV`.
+**Reasoning Layer:**
+- Purpose: Decision making using Multimodal Large Language Models (MLLMs).
+- Location: `src/hcaptcha_challenger/tools`
+- Contains: `ImageClassifier`, `SpatialPathReasoner`, `SpatialPointReasoner`, `ChallengeRouter`.
+- Depends on: `Provider Layer`, `Skill Layer`.
+- Used by: `Agent Layer`.
 
-**Reasoning Tool Layer:**
-- Purpose: Encapsulate challenge-specific AI reasoning operations.
-- Location: `src/hcaptcha_challenger/tools/`
-- Contains: `ChallengeRouter`, `ImageClassifier`, spatial reasoners.
-- Depends on: `tools/internal`, `models`, markdown prompt files.
-- Used by: `RoboticArm` in `src/hcaptcha_challenger/agent/robotic.py`.
+**Skill Layer:**
+- Purpose: Domain-specific knowledge and prompt engineering.
+- Location: `src/hcaptcha_challenger/skills`
+- Contains: `SkillManager`, YAML rules, and Markdown templates.
+- Depends on: `models.py`.
+- Used by: `Reasoning Layer`.
 
 **Provider Layer:**
-- Purpose: Implement provider protocol and network I/O to model backends.
-- Location: `src/hcaptcha_challenger/tools/internal/providers/`
-- Contains: `ChatProvider` protocol and `OpenRouterProvider`.
-- Depends on: `openai` SDK, `pydantic`.
-- Used by: `Reasoner` base class in `src/hcaptcha_challenger/tools/internal/base.py`.
-
-**Support Layer:**
-- Purpose: Shared utility and helper modules for grid generation, prompts, logging, and skill matching.
-- Location: `src/hcaptcha_challenger/helper/`, `src/hcaptcha_challenger/skills/`, `src/hcaptcha_challenger/utils.py`
-- Contains: image/grid helpers, rules loading, logging bootstrap.
-- Depends on: matplotlib, yaml/httpx, loguru.
-- Used by: CLI and agent orchestration.
+- Purpose: Interface with LLM APIs (OpenRouter, Gemini, etc.).
+- Location: `src/hcaptcha_challenger/tools/internal/providers`
+- Contains: `OpenRouterProvider`, `GeminiProvider`.
+- Depends on: `httpx`, `openai`, `google-genai`.
+- Used by: `Reasoning Layer`.
 
 ## Data Flow
 
-### Primary Request Path
+### Primary Request Path (Solving a Challenge)
 
-1. CLI entrypoint dispatches command tree (`src/hcaptcha_challenger/cli/main.py:82`).
-2. Solver/agent setup builds config + browser frame and creates `AgentV` (`src/hcaptcha_challenger/agent/challenger.py:34`).
-3. Packet listener captures `/getcaptcha` + `/checkcaptcha`, parses to typed models (`src/hcaptcha_challenger/agent/challenger.py:65`).
-4. `AgentV` resolves challenge type and delegates to `RoboticArm` strategy (`src/hcaptcha_challenger/agent/challenger.py:140`).
-5. `RoboticArm` captures screenshot, invokes tool reasoner, then performs click/drag actions (`src/hcaptcha_challenger/agent/robotic.py:362`).
-6. Tool call reaches provider `generate_with_images` and returns typed result (`src/hcaptcha_challenger/tools/internal/providers/openrouter.py:62`).
-7. Agent waits for check response queue and returns `ChallengeSignal` (`src/hcaptcha_challenger/agent/challenger.py:193`).
-
-### Dataset Analysis Flow
-
-1. Dataset command receives `dataset cost` or `dataset check` (`src/hcaptcha_challenger/cli/dataset.py:27`).
-2. Command scans challenge artifacts in `tmp`/custom path (`src/hcaptcha_challenger/cli/dataset.py:69`).
-3. Helper functions aggregate stats and report with rich tables (`src/hcaptcha_challenger/cli/dataset.py:83`).
-
-**State Management:**
-- Runtime state is mostly in-memory queues and object fields on `AgentV` (`_captcha_payload_queue`, `_captcha_response_queue`).
-- Persistent operational artifacts are file-based caches under `tmp/.cache`, `tmp/.challenge`, and `tmp/.captcha` from `AgentConfig`.
+1. **Interception:** `AgentV` detects `/getcaptcha` request and extracts the `msgpack` payload (`src/hcaptcha_challenger/agent/challenger.py:_task_handler`).
+2. **Identification:** `RoboticArm` identifies the challenge type (Binary, Select, Drag-Drop) from the payload or via visual routing if payload is missing (`src/hcaptcha_challenger/agent/robotic.py:check_challenge_type`).
+3. **Capture:** `RoboticArm` takes a screenshot of the `challenge-view` element and generates a coordinate grid overlay if needed (`src/hcaptcha_challenger/agent/robotic.py:_capture_spatial_mapping`).
+4. **Prompting:** `SkillManager` retrieves the appropriate prompt template based on the challenge text (`src/hcaptcha_challenger/skills/manager.py:get_skill`).
+5. **Reasoning:** The specific `Reasoner` (Tool) sends the image and prompt to the MLLM provider and receives structured results (`src/hcaptcha_challenger/tools/internal/base.py:__call__`).
+6. **Execution:** `RoboticArm` scales the normalized coordinates to pixel coordinates and executes human-like clicks or drags (`src/hcaptcha_challenger/agent/robotic.py:challenge_image_*`).
+7. **Verification:** `AgentV` waits for the `/checkcaptcha` response to confirm success or failure (`src/hcaptcha_challenger/agent/challenger.py:wait_for_challenge`).
 
 ## Key Abstractions
 
-**Typed Challenge Contracts:**
-- Purpose: Keep all challenge I/O strongly structured.
-- Examples: `src/hcaptcha_challenger/models.py`
-- Pattern: Pydantic models + enums at module boundary.
+**Reasoner:**
+- Purpose: Encapsulates the logic for a specific type of visual reasoning task.
+- Examples: `src/hcaptcha_challenger/tools/image_classifier/__init__.py`, `src/hcaptcha_challenger/tools/spatial/path.py`.
+- Pattern: Strategy Pattern / Command Pattern.
 
-**Reasoner Base Class:**
-- Purpose: Standardize provider invocation and response caching.
-- Examples: `src/hcaptcha_challenger/tools/internal/base.py`, `src/hcaptcha_challenger/tools/spatial/base.py`
-- Pattern: Generic abstract base class with provider composition.
-
-**Skill Routing:**
-- Purpose: Map challenge text + job type to reusable prompt templates.
-- Examples: `src/hcaptcha_challenger/skills/manager.py`, `src/hcaptcha_challenger/skills/schema.py`
-- Pattern: Rules manifest + layered source priority (user > cache > built-in).
+**SkillRule:**
+- Purpose: Defines when a specific prompt template should be used based on regex matching of the challenge question.
+- Examples: Defined in `src/hcaptcha_challenger/skills/rules.yaml`.
 
 ## Entry Points
 
-**Package script (`hc`):**
-- Location: `pyproject.toml`
-- Triggers: Shell command `hc`
-- Responsibilities: Invoke `hcaptcha_challenger.cli.main:main`.
-
-**CLI root app:**
+**CLI (hc):**
 - Location: `src/hcaptcha_challenger/cli/main.py`
-- Triggers: `hc` execution
-- Responsibilities: Attach subcommands and route to dataset/solver flows.
+- Triggers: User command line input.
+- Responsibilities: Routing to `solver` or `dataset` modules.
 
-**Library import surface:**
-- Location: `src/hcaptcha_challenger/__init__.py`
-- Triggers: Python import usage
-- Responsibilities: Expose `AgentV`, `AgentConfig`, and tool classes for embedding.
+**AgentV.wait_for_challenge():**
+- Location: `src/hcaptcha_challenger/agent/challenger.py`
+- Triggers: Called by automation scripts after triggering a captcha.
+- Responsibilities: Main loop for solving the currently active challenge.
 
 ## Architectural Constraints
 
-- **Threading:** Mixed model: background thread for network packet listener in `AgentV` plus synchronous wait loops.
-- **Global state:** Logger is globally initialized in `src/hcaptcha_challenger/__init__.py`; environment-backed settings are loaded in `AgentConfig`.
-- **Circular imports:** Not detected in scanned core modules.
-- **Provider contract:** Tool implementations assume `ChatProvider.generate_with_images` behavior; new providers must match protocol in `src/hcaptcha_challenger/tools/internal/providers/protocol.py`.
+- **Threading:** `AgentV` runs a background thread for network interception (`_task_handler`), while the main thread handles browser interaction.
+- **Global state:** Configuration is managed via a singleton-like `AgentConfig` instance passed throughout the system.
+- **Coordinate System:** Strict adherence to the 0-1000 normalized coordinate system for all spatial reasoning tools.
 
 ## Anti-Patterns
 
-### Duplicate Cost Command Implementation
+### Direct Browser Manipulation
+**What happens:** Using `element.click()` or `page.click()` directly.
+**Why it's wrong:** Detected easily by anti-bot systems as non-human.
+**Do this instead:** Use `RoboticArm.click_element()` or `RoboticArm.click_at()` which use `human_move` and `human_click`.
 
-**What happens:** `src/hcaptcha_challenger/cli/solver.py` and `src/hcaptcha_challenger/cli/dataset.py` both implement the same `cost` command body.
-**Why it's wrong:** Logic divergence risk and duplicated maintenance effort.
-**Do this instead:** Keep `cost` command in one module and delegate from the other via shared function in `src/hcaptcha_challenger/helper/cost_calculator.py`.
-
-### Async Contract Drift Between Tests and Tool APIs
-
-**What happens:** Core tools are synchronous callables, while several tests still use `await` patterns.
-**Why it's wrong:** Test expectations can drift from production behavior and mask integration issues.
-**Do this instead:** Align tests in `tests/` with current synchronous call signatures used by `RoboticArm` in `src/hcaptcha_challenger/agent/robotic.py`.
+### Hardcoded Prompts
+**What happens:** Defining LLM prompts directly in Python strings.
+**Why it's wrong:** Makes it difficult to update or localize prompts without changing code.
+**Do this instead:** Define templates in `src/hcaptcha_challenger/skills/library/` and manage them via `SkillManager`.
 
 ## Error Handling
 
-**Strategy:** Guarded operation with fallback and soft-fail logging.
+**Strategy:** Fail fast on configuration/network issues; Retry on intermittent reasoning failures.
 
 **Patterns:**
-- Use retries for network/provider boundaries (`tenacity` in `openrouter.py` and `robotic.py`).
-- Use fallback branch to visual challenge routing when payload parse fails (`AgentV._review_challenge_type`).
-- Catch-and-log file write/cache failures instead of terminating challenge loop.
+- **Tenacity Retries:** Used in `RoboticArm` for capturing spatial mapping to handle rendering delays.
+- **Fallback Type Detection:** If payload parsing fails, the system falls back to visual classification via `ChallengeRouter`.
 
 ## Cross-Cutting Concerns
 
-**Logging:** Centralized with Loguru initialization in `src/hcaptcha_challenger/utils.py` and startup in `src/hcaptcha_challenger/__init__.py`.
-**Validation:** Pydantic schemas in `src/hcaptcha_challenger/models.py` and settings validation in `src/hcaptcha_challenger/agent/config.py`.
-**Authentication:** API key read from environment/config (`OPENROUTER_API_KEY`) and passed into tool providers by `RoboticArm`.
+**Logging:** Uses `loguru` for structured logging across all layers. Logs are stored by date in `src/hcaptcha_challenger/logs/`.
+**Validation:** `pydantic` is used for all data models and configuration settings.
 
 ---
 
-*Architecture analysis: 2026-04-30*
+*Architecture analysis: 2025-05-15*

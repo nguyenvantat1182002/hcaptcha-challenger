@@ -1,126 +1,114 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-04-30
+**Analysis Date:** 2025-05-15
 
 ## Directory Layout
 
-```text
+```
 hcaptcha-challenger/
-├── src/                     # Python package source
-│   └── hcaptcha_challenger/ # Main runtime package
-├── tests/                   # Active test suite
-├── docs/                    # End-user docs and notebooks
-├── examples/                # Usage samples and demos
-├── archive/                 # Legacy code, experiments, old tests
-├── docker/                  # Containerization assets
-├── .planning/               # GSD planning + codebase map artifacts
-└── pyproject.toml           # Project metadata, deps, tooling config
+├── .github/                # GitHub Actions workflows and templates
+├── docker/                 # Docker configuration (Dockerfile, compose)
+├── docs/                   # Documentation and research notebooks (Jupyter)
+├── examples/               # Usage examples and demo scripts
+├── src/
+│   └── hcaptcha_challenger/ # Primary source code
+│       ├── agent/          # Core agent orchestration logic
+│       ├── cli/            # Command-line interface subcommands
+│       ├── helper/         # UI/Visual helpers and internal utilities
+│       ├── logs/           # Runtime log files (organized by date)
+│       ├── skills/         # Prompt templates and matching rules
+│       ├── tools/          # Reasoning engines (LLM wrappers)
+│       ├── models.py       # Shared data models (Pydantic)
+│       ├── utils.py        # Generic utility functions
+│       └── __init__.py     # Package entry point
+├── tests/                  # Test suites and mock artifacts
+├── pyproject.toml          # Project metadata and dependencies
+└── README.md               # Project documentation
 ```
 
 ## Directory Purposes
 
-**`src/hcaptcha_challenger`:**
-- Purpose: Production runtime package.
-- Contains: CLI commands, browser agent, tools, models, helper and skill systems.
-- Key files: `src/hcaptcha_challenger/__init__.py`, `src/hcaptcha_challenger/models.py`, `src/hcaptcha_challenger/utils.py`
+**src/hcaptcha_challenger/agent/:**
+- Purpose: Orchestrates the high-level flow of solving a captcha.
+- Contains: Interaction logic, mouse simulation, and agent configuration.
+- Key files: `challenger.py`, `robotic.py`, `config.py`, `mouse.py`.
 
-**`src/hcaptcha_challenger/agent`:**
-- Purpose: Core challenge orchestration and browser interaction.
-- Contains: solver control loop, robotic action primitives, agent settings.
-- Key files: `src/hcaptcha_challenger/agent/challenger.py`, `src/hcaptcha_challenger/agent/robotic.py`, `src/hcaptcha_challenger/agent/config.py`
+**src/hcaptcha_challenger/tools/:**
+- Purpose: Implements the "intelligence" of the system.
+- Contains: Specific reasoners for different challenge types (Image, Spatial).
+- Key files: `internal/base.py` (Abstract Reasoner), `image_classifier/`, `spatial/`.
 
-**`src/hcaptcha_challenger/tools`:**
-- Purpose: Tool façade + challenge-specific reasoners.
-- Contains: challenge router, image classifier, spatial reasoners, provider abstractions.
-- Key files: `src/hcaptcha_challenger/tools/__init__.py`, `src/hcaptcha_challenger/tools/internal/base.py`, `src/hcaptcha_challenger/tools/internal/providers/openrouter.py`
+**src/hcaptcha_challenger/skills/:**
+- Purpose: Decouples prompt engineering from the core logic.
+- Contains: Prompt templates (Markdown) and matching rules (YAML).
+- Key files: `manager.py`, `rules.yaml`, `library/`.
 
-**`src/hcaptcha_challenger/cli`:**
-- Purpose: Console command entrypoints.
-- Contains: top-level Typer app, dataset/solver command modules.
-- Key files: `src/hcaptcha_challenger/cli/main.py`, `src/hcaptcha_challenger/cli/dataset.py`, `src/hcaptcha_challenger/cli/solver.py`
+**src/hcaptcha_challenger/cli/:**
+- Purpose: Provides a user-friendly interface for manual operations.
+- Contains: Typer-based command definitions.
+- Key files: `main.py`, `solver.py`, `dataset.py`.
 
-**`src/hcaptcha_challenger/helper`:**
-- Purpose: Supporting image/cost utilities reused by CLI and agent flows.
-- Contains: coordinate-grid generation, visualization, cost calculator.
-- Key files: `src/hcaptcha_challenger/helper/create_coordinate_grid.py`, `src/hcaptcha_challenger/helper/cost_calculator.py`
-
-**`src/hcaptcha_challenger/skills`:**
-- Purpose: Rule-driven prompt template matching for challenge prompts.
-- Contains: manifest schema, rule manager, markdown skill library.
-- Key files: `src/hcaptcha_challenger/skills/manager.py`, `src/hcaptcha_challenger/skills/schema.py`, `src/hcaptcha_challenger/skills/rules.yaml`
-
-**`tests`:**
-- Purpose: Test coverage for helper and tool behavior.
-- Contains: tool tests, spatial tests, helper tests, model/schema tests.
-- Key files: `tests/test_tools_challenge_classifier.py`, `tests/test_tools_spatial_path_reasoning.py`, `tests/test_helper_create_coordinate_grid.py`
+**src/hcaptcha_challenger/helper/:**
+- Purpose: Low-level UI manipulation and artifact generation.
+- Contains: Scripts for coordinate grids, rasterization, and video conversion.
+- Key files: `create_coordinate_grid.py`, `visualize_attention_points.py`.
 
 ## Key File Locations
 
 **Entry Points:**
-- `pyproject.toml`: Registers `hc = hcaptcha_challenger.cli.main:main`.
-- `src/hcaptcha_challenger/cli/main.py`: Root CLI app and command wiring.
-- `src/hcaptcha_challenger/__init__.py`: Public import surface and runtime log initialization.
+- `src/hcaptcha_challenger/cli/main.py`: Entry point for the `hc` command.
+- `src/hcaptcha_challenger/agent/challenger.py`: Main API for programmatic usage (`AgentV`).
 
 **Configuration:**
-- `pyproject.toml`: Dependency, build, lint/test tool configuration.
-- `setup.py`: Legacy packaging compatibility.
-- `src/hcaptcha_challenger/agent/config.py`: Runtime settings and env-backed secrets.
+- `src/hcaptcha_challenger/agent/config.py`: Defines all environment variables and default settings.
+- `pyproject.toml`: Defines dependencies and build system.
 
 **Core Logic:**
-- `src/hcaptcha_challenger/agent/challenger.py`: Captcha response lifecycle and queue handling.
-- `src/hcaptcha_challenger/agent/robotic.py`: Main challenge-solving action pipeline.
-- `src/hcaptcha_challenger/models.py`: Canonical data contracts and challenge enums.
-- `src/hcaptcha_challenger/tools/internal/providers/openrouter.py`: External model call adapter.
+- `src/hcaptcha_challenger/agent/robotic.py`: Implementation of `RoboticArm` (the browser interaction bridge).
+- `src/hcaptcha_challenger/models.py`: Central repository for all Pydantic schemas.
 
 **Testing:**
-- `tests/`: Primary automated test folder configured by `[tool.pytest.ini_options]`.
-- `archive/tests/`: Historical tests (treat as legacy/non-authoritative for new work).
+- `tests/`: Contains both unit tests for tools and integration tests using real artifacts.
+- `tests/challenge_view/`: Artifacts used for visual regression and tool testing.
 
 ## Naming Conventions
 
 **Files:**
-- Snake_case module naming across production and tests (example: `mouse_config.py`, `test_tools_common.py`).
-- Test files use `test_*.py` prefix (example: `test_tools_image_classifier.py`).
+- `snake_case.py`: standard Python module naming (e.g., `spatial_point_reasoner.py`).
+- `.md`: Used for prompt templates in `skills/library/` and tool descriptions.
 
 **Directories:**
-- Lowercase domain-based directories under package root (example: `agent`, `tools`, `skills`).
-- Tool categories are nested as nouns by capability (example: `tools/challenge_router`, `tools/spatial`).
+- `snake_case/`: standard Python package naming.
 
 ## Where to Add New Code
 
-**New Feature:**
-- Primary code: `src/hcaptcha_challenger/agent/` for orchestration changes, or `src/hcaptcha_challenger/tools/` for new reasoning capabilities.
-- Tests: `tests/` with `test_<feature>.py` naming and import from public package path where possible.
+**New Challenge Type:**
+1. Add new enum members to `ChallengeTypeEnum` in `src/hcaptcha_challenger/models.py`.
+2. Create a new reasoning tool in `src/hcaptcha_challenger/tools/` inheriting from `Reasoner`.
+3. Add a prompt template to `src/hcaptcha_challenger/skills/library/` and a rule to `rules.yaml`.
+4. Implement the solving flow in `RoboticArm` in `src/hcaptcha_challenger/agent/robotic.py`.
+5. Update `AgentV._solve_captcha` in `src/hcaptcha_challenger/agent/challenger.py` to route the new type.
 
-**New Component/Module:**
-- Implementation: `src/hcaptcha_challenger/<domain>/` where `<domain>` matches ownership (`helper`, `tools`, `skills`, `agent`).
+**New LLM Provider:**
+1. Implement the `ChatProvider` protocol in `src/hcaptcha_challenger/tools/internal/providers/`.
+2. Register/use the new provider in `Reasoner._create_default_provider`.
 
-**Utilities:**
-- Shared helpers: `src/hcaptcha_challenger/helper/` for reusable non-provider/non-agent helpers.
-- Cross-cutting typed models: `src/hcaptcha_challenger/models.py` (or split submodule if model surface becomes large).
+**New CLI Command:**
+1. Define the command in a new or existing module in `src/hcaptcha_challenger/cli/`.
+2. Register it with the main app in `src/hcaptcha_challenger/cli/main.py`.
 
 ## Special Directories
 
-**`archive/`:**
-- Purpose: Legacy implementation snapshots, old tests, and exploratory code.
-- Generated: No.
-- Committed: Yes.
+**src/hcaptcha_challenger/logs/:**
+- Purpose: Automated storage of runtime logs.
+- Generated: Yes
+- Committed: No (usually ignored by `.gitignore`)
 
-**`tmp/`:**
-- Purpose: Runtime output workspace (`.cache`, challenge artifacts, model answers).
-- Generated: Yes.
-- Committed: No (excluded by `.gitignore` patterns).
-
-**`.planning/`:**
-- Purpose: GSD planning and generated architecture/quality map docs.
-- Generated: Yes.
-- Committed: Project-dependent (currently present in repository workspace).
-
-**`src/hcaptcha_challenger/logs/`:**
-- Purpose: Runtime log sink configured by package import initialization.
-- Generated: Yes.
-- Committed: No (runtime artifact directory).
+**tests/challenge_view/:**
+- Purpose: Curated set of captcha images for testing tools.
+- Generated: No (collected manually or via `dataset` CLI)
+- Committed: Yes
 
 ---
 
-*Structure analysis: 2026-04-30*
+*Structure analysis: 2025-05-15*
