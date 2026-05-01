@@ -63,6 +63,7 @@ def test_new_presets_exist():
     fast = resolve_config("fast")
     
     assert standard.mouse_speed == 1.0
+    assert standard.recognition_delay == (200, 500)
     
     assert hesitant.mouse_speed == 1.8
     assert hesitant.knots_count == 4
@@ -71,3 +72,17 @@ def test_new_presets_exist():
     assert fast.mouse_speed == 0.6
     assert fast.knots_count == 1
     assert fast.recognition_delay == (150, 300)
+
+def test_select_random_persona():
+    from hcaptcha_challenger.agent.mouse_config import select_random_persona
+    for _ in range(50):  # Test multiple times to ensure it works for all random choices
+        cfg = select_random_persona()
+        assert isinstance(cfg, HumanConfig)
+        assert hasattr(cfg, "recognition_delay")
+        assert cfg.mouse_speed in [1.0, 1.8, 0.6]
+
+def test_resolve_config_with_new_presets():
+    cfg = resolve_config("hesitant", overrides={"mouse_speed": 2.0})
+    assert cfg.mouse_speed == 2.0
+    assert cfg.knots_count == 4
+    assert cfg.recognition_delay == (500, 1200)
