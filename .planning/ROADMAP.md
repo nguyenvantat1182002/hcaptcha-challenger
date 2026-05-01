@@ -18,12 +18,14 @@
 ## Phase 3: Fine-tuning & Optimization
 **Goal:** Calibrate movement parameters and introduce behavioral variety to bypass detection.
 **Plans:** 2 plans
-- [ ] 03-01-PLAN.md — Persona System & Refined Presets
-- [ ] 03-02-PLAN.md — Integration & Calibration Logic
+- [x] 03-01-PLAN.md — Persona System & Refined Presets
+- [x] 03-02-PLAN.md — Integration & Calibration Logic
 
+**Validation:** 03-VALIDATION.md
 **Requirements:** PH3-PER, PH3-DEL, PH3-TEL
 
 ## Phase 4: Verification & Cleanup
-- **Task 4.1: Implementation Testing.** Run full integration tests with real hCaptcha challenges.
-- **Task 4.2: Code Cleanup.** Remove any remaining unused legacy constants.
-- **Task 4.3: Documentation Update.** Update internal docs or comments to reflect the change to `HumanCursor`.
+- [x] Task 4.1: Implementation Testing. Run full integration tests with real hCaptcha challenges.
+- [x] Task 4.2: Code Cleanup. Remove any remaining unused legacy constants.
+- [x] Task 4.3: Documentation Update. Update internal docs or comments to reflect the change to `HumanCursor`.
+
