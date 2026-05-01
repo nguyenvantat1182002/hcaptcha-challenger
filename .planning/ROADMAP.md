@@ -1,8 +1,11 @@
 # Roadmap: HumanCursor Integration
 
 ## Phase 1: Foundation & Dependencies
-- **Task 1.1: Install Dependencies.** Add `human-cursor`, `numpy`, and `pytweening` to the project (update `pyproject.toml` or `requirements.txt`).
-- **Task 1.2: Environment Setup.** Verify the new dependencies work in the development environment.
+**Goal:** Establish the technical foundation by installing required dependencies and verifying the environment readiness for HumanCursor integration.
+**Plans:** 1 plan
+- [x] 01-01-PLAN.md — Install dependencies and verify environment setup.
+
+**Requirements:** 1.1, 1.2
 
 ## Phase 2: Implementation & Adaptation
 - **Task 2.1: Develop DrissionPage Adapter.** Create a wrapper or adapter to allow `HumanCursor` to use `DrissionPage`'s mouse interaction methods.

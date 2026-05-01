@@ -2,19 +2,19 @@
 
 ## Overview
 - **Goal:** Replace legacy cursor movement with `HumanCursor`.
-- **Status:** Initialized (Research, Requirements, Roadmap complete).
-- **Phase:** 0 - Not Started.
+- **Status:** Phase 1 complete. Environment verified.
+- **Phase:** 2 - Implementation.
 
 ## Milestones
 - [x] **Project Initialized** (2026-05-01)
-- [ ] **Dependencies Integrated**
+- [x] **Dependencies Integrated** (2026-05-01)
 - [ ] **Adapter Implemented**
 - [ ] **Core Logic Swapped**
 - [ ] **Verified & Cleaned Up**
 
-## Active Phase: 0 - Initialization
-- All planning documents have been created.
-- Research confirms feasibility and identifies `DrissionPage` as the key integration point.
+## Active Phase: 2 - Implementation
+- Phase 1 (Foundation) is complete.
+- Moving to Task 2.1: Develop DrissionPage Adapter.
 
 ## Blockers
 - None.
