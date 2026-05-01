@@ -246,6 +246,23 @@ _PRESETS: dict[str, HumanConfig] = {
 }
 
 
+def select_random_persona() -> HumanConfig:
+    """Select a random persona based on weighted probabilities.
+
+    Probabilities:
+    - Standard: 60%
+    - Fast: 20%
+    - Hesitant: 20%
+
+    Returns:
+        A resolved HumanConfig instance.
+    """
+    choices = ["standard", "fast", "hesitant"]
+    weights = [0.6, 0.2, 0.2]
+    persona = random.choices(choices, weights=weights, k=1)[0]
+    return resolve_config(persona)  # type: ignore
+
+
 def resolve_config(
     preset: HumanPreset = "default",
     overrides: HumanConfigOverrides | None = None,
