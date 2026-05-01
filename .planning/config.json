@@ -1,0 +1,10 @@
+{
+  "mode": "standard",
+  "research": "comprehensive",
+  "intel": {
+    "enabled": true
+  },
+  "ui": {
+    "brand": "vanilla"
+  }
+}
