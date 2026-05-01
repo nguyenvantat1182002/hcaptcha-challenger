@@ -51,3 +51,23 @@ def test_validation():
         HumanConfig(target_points=0)
     with pytest.raises(ValueError):
         HumanConfig(knots_count=-1)
+
+def test_recognition_delay_exists():
+    cfg = HumanConfig()
+    assert hasattr(cfg, "recognition_delay")
+    assert cfg.recognition_delay == (200, 500)
+
+def test_new_presets_exist():
+    standard = resolve_config("standard")
+    hesitant = resolve_config("hesitant")
+    fast = resolve_config("fast")
+    
+    assert standard.mouse_speed == 1.0
+    
+    assert hesitant.mouse_speed == 1.8
+    assert hesitant.knots_count == 4
+    assert hesitant.recognition_delay == (500, 1200)
+    
+    assert fast.mouse_speed == 0.6
+    assert fast.knots_count == 1
+    assert fast.recognition_delay == (150, 300)

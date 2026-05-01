@@ -17,7 +17,7 @@ from typing import Any, Literal, Tuple, TypedDict
 # ---------------------------------------------------------------------------
 
 Range = Tuple[float, float]
-HumanPreset = Literal["default", "careful"]
+HumanPreset = Literal["default", "careful", "standard", "hesitant", "fast"]
 
 
 class HumanConfigOverrides(TypedDict, total=False):
@@ -50,6 +50,7 @@ class HumanConfigOverrides(TypedDict, total=False):
     click_hold_input: Range
     click_hold_button: Range
     click_input_x_range: Range
+    recognition_delay: Range
     idle_drift_px: float
     idle_pause_range: Range
     scroll_delta_base: Range
@@ -117,6 +118,9 @@ class HumanConfig:
     click_hold_input: Range = (40, 100)
     click_hold_button: Range = (60, 150)
     click_input_x_range: Range = (0.05, 0.30)
+
+    # "Human thinking time" before reacting to a challenge
+    recognition_delay: Range = (200, 500)
 
     # Mouse — idle
     idle_drift_px: float = 3
@@ -206,9 +210,39 @@ def _careful_config() -> HumanConfig:
     )
 
 
+def _standard_config() -> HumanConfig:
+    """Standard preset: balanced speed and jitter."""
+    return HumanConfig(
+        mouse_speed=1.0,
+        knots_count=2,
+        recognition_delay=(200, 500),
+    )
+
+
+def _hesitant_config() -> HumanConfig:
+    """Hesitant preset: slower, more complex paths, longer thinking time."""
+    return HumanConfig(
+        mouse_speed=1.8,
+        knots_count=4,
+        recognition_delay=(500, 1200),
+    )
+
+
+def _fast_config() -> HumanConfig:
+    """Fast preset: quick movements, direct paths, rapid reaction."""
+    return HumanConfig(
+        mouse_speed=0.6,
+        knots_count=1,
+        recognition_delay=(150, 300),
+    )
+
+
 _PRESETS: dict[str, HumanConfig] = {
     "default": HumanConfig(),
     "careful": _careful_config(),
+    "standard": _standard_config(),
+    "hesitant": _hesitant_config(),
+    "fast": _fast_config(),
 }
 
 
