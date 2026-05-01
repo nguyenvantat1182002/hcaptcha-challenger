@@ -1,9 +1,11 @@
 import base64
+import json
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import re
 
+from datetime import datetime
 from typing import Tuple
 from pathlib import Path
 from uuid import uuid4
@@ -18,7 +20,7 @@ from hcaptcha_challenger.agent.mouse import (
     human_move, human_click, click_target
 )
 from hcaptcha_challenger.agent.mouse_config import (
-    resolve_config, sleep_ms, rand
+    resolve_config, sleep_ms, rand, select_random_persona, rand_range
 )
 
 
@@ -55,7 +57,12 @@ class DrissionPageMouse:
         self.curr_y: float = 0
 
     def _frame_offset(self) -> Tuple[float, float]:
-        """Iframe top-left on page viewport, including border."""
+        """Iframe top-left on page viewport, including border.
+        If we are on a top-level page, offset is (0, 0).
+        """
+        if not hasattr(self._frame, "frame_ele"):
+            return 0, 0
+            
         fx, fy = self._frame.frame_ele.rect.viewport_location
         try:
             bt = float(self._frame.frame_ele.style('border-top-width').replace('px', ''))
@@ -71,8 +78,8 @@ class DrissionPageMouse:
         self._actions.curr_y = oy + self.curr_y
 
     def move(self, x: float, y: float) -> None:
-        self.curr_x = x
-        self.curr_y = y
+        self.curr_x = round(x)
+        self.curr_y = round(y)
         self._sync_actions_pos()
         # Single-point move — bypass actions.move() linear interpolation
         self._actions._dr.run(
@@ -96,14 +103,23 @@ class DrissionPageMouse:
 
 
 class RoboticArm:
-    def __init__(self, page: ChromiumFrame, config: AgentConfig):
+    def __init__(self, page: ChromiumFrame, config: AgentConfig, persona: str | None = None):
         self.page = page
         self.config = config
         self._debug = config.enable_challenger_debug
 
         # Human-like mouse adapter
-        self._human_cfg = resolve_config("default", overrides={"mouse_speed": config.MOUSE_SPEED})
+        if persona:
+            self._persona_name = persona
+            self._human_cfg = resolve_config(persona)
+        else:
+            self._persona_name, self._human_cfg = select_random_persona()
+            
+        # Apply global speed multiplier
+        self._human_cfg.mouse_speed *= config.MOUSE_SPEED
         self._raw_mouse = DrissionPageMouse(page)
+
+        logger.info(f"Initialized RoboticArm with persona: {self._persona_name}")
 
         self._challenge_router = ChallengeRouter(
             openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
@@ -149,13 +165,16 @@ class RoboticArm:
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
 
         # Get iframe element's position on the top-level page viewport
-        frame_left, frame_top = self.page.frame_ele.rect.viewport_location
-
-        # Account for iframe border width
-        try:
-            bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
-            bl = float(self.page.frame_ele.style('border-left-width').replace('px', ''))
-        except (ValueError, AttributeError):
+        if hasattr(self.page, "frame_ele"):
+            frame_left, frame_top = self.page.frame_ele.rect.viewport_location
+            # Account for iframe border width
+            try:
+                bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
+                bl = float(self.page.frame_ele.style('border-left-width').replace('px', ''))
+            except (ValueError, AttributeError):
+                bt, bl = 0, 0
+        else:
+            frame_left, frame_top = 0, 0
             bt, bl = 0, 0
 
         # Compute absolute position on the page
@@ -201,7 +220,7 @@ class RoboticArm:
         return f"Please note that the current task type is: {job_type.value}"
 
     def click_element(self, element: ChromiumElement, is_input: bool = False):
-        """Human-like click on a DrissionPage element using bezier mouse movement."""
+        """Human-like click on a DrissionPage element using HumanCursor trajectory."""
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
         target = click_target(rect, is_input, self._human_cfg)
 
@@ -296,6 +315,18 @@ class RoboticArm:
 
         return bbox
 
+    def _record_outcome(self, success: bool):
+        """Record the outcome of a challenge for telemetry."""
+        record = {
+            "timestamp": datetime.now().isoformat(),
+            "persona": self._persona_name,
+            "success": success
+        }
+        self.config.telemetry_dir.mkdir(parents=True, exist_ok=True)
+        telemetry_file = self.config.telemetry_dir.joinpath("telemetry.json")
+        with open(telemetry_file, "a") as f:
+            f.write(json.dumps(record) + "\n")
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_fixed(1),
@@ -334,7 +365,7 @@ class RoboticArm:
         return challenge_screenshot, grid_divisions, real_bbox
 
     def _perform_drag_drop(self, path: SpatialPath):
-        """Performs a human-like drag and drop using bezier curve from mouse.py."""
+        """Performs a human-like drag and drop using HumanCursor trajectory."""
         start_x, start_y = path.start_point.x, path.start_point.y
         end_x, end_y = path.end_point.x, path.end_point.y
         raw = self._raw_mouse
@@ -348,7 +379,7 @@ class RoboticArm:
 
         raw.down()
 
-        # Drag along bezier path to end position
+        # Drag along human-like path to end position
         human_move(raw, start_x, start_y, end_x, end_y, cfg)
 
         # Small precision adjustment pause
@@ -375,6 +406,7 @@ class RoboticArm:
 
             # Image classification
             response = self._image_classifier(challenge_screenshot=challenge_screenshot)
+            sleep_ms(rand_range(self._human_cfg.recognition_delay))
             boolean_matrix = response.convert_box_to_boolean_matrix()
             
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
@@ -400,6 +432,7 @@ class RoboticArm:
                 submit_btn = frame_challenge.ele("css:div[class='button-submit button']")
                 self.click_element(submit_btn)
         
+        self._record_outcome(True)
         return True
 
     def challenge_image_drag_drop(self, job_type: ChallengeTypeEnum):
@@ -424,6 +457,7 @@ class RoboticArm:
                 auxiliary_information=user_prompt,
                 **kwargs,
             )
+            sleep_ms(rand_range(self._human_cfg.recognition_delay))
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
             self._spatial_path_reasoner.cache_response(
                 path=cache_key.joinpath(f"{cache_key.name}_{cid}_model_answer.json")
@@ -444,6 +478,7 @@ class RoboticArm:
                 submit_btn = frame_challenge.ele("css:div[class='button-submit button']")
                 self.click_element(submit_btn)
 
+        self._record_outcome(True)
         return True
 
     def challenge_image_label_select(self, job_type: ChallengeTypeEnum):
@@ -468,6 +503,7 @@ class RoboticArm:
                 auxiliary_information=user_prompt,
                 **kwargs,
             )
+            sleep_ms(rand_range(self._human_cfg.recognition_delay))
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
             self._spatial_point_reasoner.cache_response(
                 path=cache_key.joinpath(f"{cache_key.name}_{cid}_model_answer.json")
@@ -487,4 +523,5 @@ class RoboticArm:
                 submit_btn = frame_challenge.ele("css:div[class='button-submit button']")
                 self.click_element(submit_btn)
 
+        self._record_outcome(True)
         return True

@@ -76,7 +76,8 @@ def test_new_presets_exist():
 def test_select_random_persona():
     from hcaptcha_challenger.agent.mouse_config import select_random_persona
     for _ in range(50):  # Test multiple times to ensure it works for all random choices
-        cfg = select_random_persona()
+        name, cfg = select_random_persona()
+        assert name in ["standard", "hesitant", "fast"]
         assert isinstance(cfg, HumanConfig)
         assert hasattr(cfg, "recognition_delay")
         assert cfg.mouse_speed in [1.0, 1.8, 0.6]

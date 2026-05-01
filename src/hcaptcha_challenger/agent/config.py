@@ -37,6 +37,7 @@ class AgentConfig(BaseSettings):
     cache_dir: Path = Path("tmp/.cache")
     challenge_dir: Path = Path("tmp/.challenge")
     captcha_response_dir: Path = Path("tmp/.captcha")
+    telemetry_dir: Path = Path("tmp/.telemetry")
     ignore_request_types: IGNORE_REQUEST_TYPE_LIST | None = Field(default_factory=list)
     ignore_request_questions: List[str] | None = Field(default_factory=list)
     

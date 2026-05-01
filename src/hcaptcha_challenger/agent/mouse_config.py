@@ -246,7 +246,7 @@ _PRESETS: dict[str, HumanConfig] = {
 }
 
 
-def select_random_persona() -> HumanConfig:
+def select_random_persona() -> Tuple[str, HumanConfig]:
     """Select a random persona based on weighted probabilities.
 
     Probabilities:
@@ -255,12 +255,12 @@ def select_random_persona() -> HumanConfig:
     - Hesitant: 20%
 
     Returns:
-        A resolved HumanConfig instance.
+        A tuple of (persona_name, HumanConfig).
     """
     choices = ["standard", "fast", "hesitant"]
     weights = [0.6, 0.2, 0.2]
     persona = random.choices(choices, weights=weights, k=1)[0]
-    return resolve_config(persona)  # type: ignore
+    return persona, resolve_config(persona)  # type: ignore
 
 
 def resolve_config(

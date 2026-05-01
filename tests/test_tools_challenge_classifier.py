@@ -97,10 +97,10 @@ class TestChallengeClassifier:
     @pytest.fixture(scope="class")
     def classifier(self):
         """Create challenge classifier instance"""
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY")
         if not api_key:
-            pytest.skip("GEMINI_API_KEY environment variable not set")
-        return ChallengeClassifier(gemini_api_key=api_key)
+            pytest.skip("Neither OPENROUTER_API_KEY nor GEMINI_API_KEY set")
+        return ChallengeClassifier(openrouter_api_key=api_key)
 
     @pytest.mark.parametrize("image_file, expected_type_enum", generate_individual_test_cases())
     async def test_challenge_classifier(
@@ -128,7 +128,8 @@ class TestChallengeClassifier:
 
 async def test_challenge_classifier():
     challenge_dir = Path(__file__).parent / "challenge_view"
-    challenge_router = ChallengeRouter(gemini_api_key=os.getenv("GEMINI_API_KEY"))
+    api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY")
+    challenge_router = ChallengeRouter(openrouter_api_key=api_key)
 
     groups = {
         "image_drag_drop": {

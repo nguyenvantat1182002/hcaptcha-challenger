@@ -13,8 +13,7 @@ from hcaptcha_challenger.utils import SiteKey
 async def challenge(page: Page) -> AgentV:
     """Automates the process of solving an hCaptcha challenge."""
     # [IMPORTANT] Initialize the Agent before triggering hCaptcha
-    agent_config = AgentConfig(DISABLE_BEZIER_TRAJECTORY=True)
-    agent = AgentV(page=page, agent_config=agent_config)
+    agent = AgentV(page=page)
 
     # In your real-world workflow, you may need to replace the `click_checkbox()`
     # It may be to click the Login button or the Submit button to a trigger challenge
