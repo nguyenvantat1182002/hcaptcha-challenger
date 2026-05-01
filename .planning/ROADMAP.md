@@ -5,6 +5,10 @@
 - [x] Research `humancursor` API and DrissionPage compatibility.
 - [ ] Create a prototype script testing `humancursor` with a raw `DrissionPage` session.
 
+**Plans:** 2 plans
+- [ ] 01-01-PLAN.md — Refactor mouse.py to use humancursor library and implement core movement loop.
+- [ ] 01-02-PLAN.md — Create trajectory comparison prototype for visual validation.
+
 ## Phase 2: Implementation (Refactor)
 - [ ] Implement `DrissionPageCursorAdapter` to bridge `humancursor` and DrissionPage.
 - [ ] Refactor `src/hcaptcha_challenger/agent/mouse.py` to use `humancursor`.
