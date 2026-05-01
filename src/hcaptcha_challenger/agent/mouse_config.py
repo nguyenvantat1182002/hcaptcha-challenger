@@ -10,7 +10,7 @@ import math
 import random
 import time
 from dataclasses import dataclass, field
-from typing import Literal, Tuple, TypedDict
+from typing import Any, Literal, Tuple, TypedDict
 
 # ---------------------------------------------------------------------------
 # Type alias
@@ -32,10 +32,15 @@ class HumanConfigOverrides(TypedDict, total=False):
     mistype_chance: float
     mistype_delay_notice: Range
     mistype_delay_correct: Range
-    mouse_steps_divisor: float
-    mouse_min_steps: int
-    mouse_max_steps: int
-    mouse_wobble_max: float
+    mouse_speed: float
+    mouse_move_delay_ms: Range
+    knots_count: int
+    distortion_mean: float
+    distortion_st_dev: float
+    distortion_frequency: float
+    offset_boundary_x: int
+    offset_boundary_y: int
+    target_points: int
     mouse_overshoot_chance: float
     mouse_overshoot_px: Range
     mouse_burst_size: Range
@@ -91,10 +96,16 @@ class HumanConfig:
     # Mouse — movement
     mouse_speed: float = 1.0  # Speed multiplier: 0.5=fast, 1.0=normal, 2.0=slow
     mouse_move_delay_ms: Range = (1, 4)  # Delay between each trajectory point (ms)
-    mouse_steps_divisor: float = 8
-    mouse_min_steps: int = 25
-    mouse_max_steps: int = 80
-    mouse_wobble_max: float = 1.5
+    
+    # humancursor parameters
+    knots_count: int = 2
+    distortion_mean: float = 1.0
+    distortion_st_dev: float = 1.0
+    distortion_frequency: float = 0.5
+    offset_boundary_x: int = 100
+    offset_boundary_y: int = 100
+    target_points: int = 20
+
     mouse_overshoot_chance: float = 0.15
     mouse_overshoot_px: Range = (3, 6)
     mouse_burst_size: Range = (3, 5)
@@ -132,6 +143,27 @@ class HumanConfig:
     idle_between_actions: bool = False
     idle_between_duration: Range = (0.3, 0.8)
 
+    def __post_init__(self):
+        """Validate critical configuration parameters."""
+        if self.target_points <= 0:
+            raise ValueError("target_points must be greater than 0")
+        if self.knots_count < 0:
+            raise ValueError("knots_count must be at least 0")
+        if self.mouse_speed <= 0:
+            raise ValueError("mouse_speed must be greater than 0")
+
+    def to_humancursor_dict(self) -> dict[str, Any]:
+        """Convert relevant fields to a dictionary compatible with humancursor."""
+        return {
+            "knots_count": self.knots_count,
+            "distortion_mean": self.distortion_mean,
+            "distortion_st_dev": self.distortion_st_dev,
+            "distortion_frequency": self.distortion_frequency,
+            "offset_boundary_x": self.offset_boundary_x,
+            "offset_boundary_y": self.offset_boundary_y,
+            "target_points": self.target_points,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Presets
@@ -154,6 +186,10 @@ def _careful_config() -> HumanConfig:
         mouse_burst_pause=(12, 25),
         mouse_speed=1.5,  # Slower movement
         mouse_move_delay_ms=(2, 6),
+        # humancursor careful params
+        knots_count=3,
+        target_points=40,
+        distortion_frequency=0.3,
         # Mouse — clicks (longer aiming and holding)
         click_aim_delay_input=(80, 180),
         click_aim_delay_button=(120, 280),
