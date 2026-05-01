@@ -7,9 +7,10 @@ We are replacing the custom human-like cursor algorithm with the `humancursor` l
 - **Research:** Completed. Found that `humancursor` is designed for Selenium but can be adapted.
 - **Requirements:** Defined.
 - **Roadmap:** Defined.
+- **Phase 1 Context:** Gathered. Decisions on integration strategy and prototype goal are locked.
 
 ## Active Tasks
-- Phase 1: Prototype `humancursor` + `DrissionPage` integration.
+- Phase 1: Planning implementation and prototype development.
 
 ## Blockers
 - None.
