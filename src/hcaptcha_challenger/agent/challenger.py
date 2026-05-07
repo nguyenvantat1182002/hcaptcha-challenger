@@ -66,46 +66,34 @@ class AgentV:
         for packet in self.page.listen.steps():
             try:
                 if '/getcaptcha' in packet.url:
-                    match packet.response.headers.get('content-type', ''):
-                        case 'application/json':
-                            data = packet.response.body
-                            
-                            if data.get("pass"):
-                                while not self._captcha_response_queue.empty():
-                                    self._captcha_response_queue.get_nowait()
+                    result = self.page.run_js(f"""
+                        async function() {{
+                            const byteArray = new Uint8Array({list(packet.response.body)});
+                            console.log('Data has been converted to Uint8Array, length:', byteArray.length);
 
-                                cr = CaptchaResponse(**data)
-                                self._captcha_response_queue.put_nowait(cr)
-                                
-                            if data.get("request_config"):
-                                captcha_payload = CaptchaPayload(**data)
-                                self._captcha_payload_queue.put_nowait(captcha_payload)
-                        case 'application/octet-stream':
-                            result = self.page.run_js(f"""
-                                async function() {{
-                                    const byteArray = new Uint8Array({list(packet.response.body)});
-                                    console.log('Data has been converted to Uint8Array, length:', byteArray.length);
+                            try {{
+                                const hswResult = await hsw(0, byteArray);
+                                return Array.from(hswResult);
+                            }} catch (e) {{
+                                return {{error: e.toString()}};
+                            }}
+                        }}
+                    """)
 
-                                    try {{
-                                        const hswResult = await hsw(0, byteArray);
-                                        return Array.from(hswResult);
-                                    }} catch (e) {{
-                                        return {{error: e.toString()}};
-                                    }}
-                                }}
-                            """)
-
-                            if isinstance(result, list) and not any(isinstance(x, dict) and "error" in x for x in result):
-                                unpacked_data = msgpack.unpackb(bytes(result))
-                                captcha_payload = CaptchaPayload(**unpacked_data)
-
-                                self._captcha_payload_queue.put_nowait(captcha_payload)
+                    if isinstance(result, list) and not any(isinstance(x, dict) and "error" in x for x in result):
+                        unpacked_data = msgpack.unpackb(bytes(result))
+                        captcha_payload = CaptchaPayload(**unpacked_data)
+                        
+                        self._captcha_payload_queue.put_nowait(captcha_payload)
                 elif '/checkcaptcha' in packet.url:
                     metadata = packet.response.body
                     self._captcha_response_queue.put_nowait(CaptchaResponse(**metadata))
             except Exception:
+                self._captcha_payload_queue.put_nowait(None)
                 traceback.print_exc()
-
+            finally:
+                return
+            
     def _review_challenge_type(self) -> RequestType | ChallengeTypeEnum:
         try:
             self._captcha_payload = self._captcha_payload_queue.get(timeout=30)
@@ -118,8 +106,8 @@ class AgentV:
         self.robotic_arm.signal_crumb_count = None
         self.robotic_arm.captcha_payload = None
         if not self._captcha_payload:
-            return self.robotic_arm.check_challenge_type()
-
+            return None
+        
         try:
             request_type = self._captcha_payload.request_type
             tasklist = self._captcha_payload.tasklist
@@ -133,9 +121,11 @@ class AgentV:
                     return RequestType.IMAGE_LABEL_BINARY
                 case RequestType.IMAGE_LABEL_AREA_SELECT:
                     self.robotic_arm.signal_crumb_count = tasklist_length
+
                     max_shapes = self._captcha_payload.request_config.max_shapes_per_image
                     if not isinstance(max_shapes, int):
-                        return self.robotic_arm.check_challenge_type()
+                        return None
+                    
                     return (
                         ChallengeTypeEnum.IMAGE_LABEL_SINGLE_SELECT
                         if max_shapes == 1
@@ -143,6 +133,7 @@ class AgentV:
                     )
                 case RequestType.IMAGE_DRAG_DROP:
                     self.robotic_arm.signal_crumb_count = tasklist_length
+
                     return (
                         ChallengeTypeEnum.IMAGE_DRAG_SINGLE
                         if len(tasklist[0].entities) == 1
@@ -152,10 +143,13 @@ class AgentV:
             logger.error(f"Error parsing challenge type: {err}")
 
         # Fallback to visual recognition solution
-        return self.robotic_arm.check_challenge_type()
+        return None
 
     def _solve_captcha(self) -> ChallengeSignal:
         challenge_type = self._review_challenge_type()
+        if not challenge_type:
+            return None
+        
         logger.debug(f"Start Challenge - type={challenge_type.value} count={self.robotic_arm.signal_crumb_count}")
         
         # {{< Skip specific challenge questions >}}
@@ -210,9 +204,11 @@ class AgentV:
         # ----------------------------------------------------------------------
         if self._captcha_response_queue.empty():
             result = self._solve_captcha()
-            if not result:
+            if result is None:
+                return ChallengeSignal.SUCCESS
+            elif not result:
                 return ChallengeSignal.FAILURE
-
+            
         # Waiting for hCAPTCHA response processing result
         # -----------------------------------------------
         # After the completion of the human-machine challenge workflow,
