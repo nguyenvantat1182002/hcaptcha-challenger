@@ -64,30 +64,45 @@ class AgentV:
     def _task_handler(self):
         for packet in self.page.listen.steps():
             if '/getcaptcha' in packet.url:
-                result = self.page.run_js(f"""
-                    async function() {{
-                        const byteArray = new Uint8Array({list(packet.response.body)});
-                        console.log('Data has been converted to Uint8Array, length:', byteArray.length);
+                match packet.response.headers.get('content-type', ''):
+                    case 'application/json':
+                        data = packet.response.body
+                        
+                        if data.get("pass"):
+                            while not self._captcha_response_queue.empty():
+                                self._captcha_response_queue.get_nowait()
 
-                        try {{
-                            const hswResult = await hsw(0, byteArray);
-                            return Array.from(hswResult);
-                        }} catch (e) {{
-                            return {{error: e.toString()}};
-                        }}
-                    }}
-                """)
+                            cr = CaptchaResponse(**data)
+                            self._captcha_response_queue.put_nowait(cr)
+                            
+                        if data.get("request_config"):
+                            captcha_payload = CaptchaPayload(**data)
+                            self._captcha_payload_queue.put_nowait(captcha_payload)
+                    case 'application/octet-stream':
+                        result = self.page.run_js(f"""
+                            async function() {{
+                                const byteArray = new Uint8Array({list(packet.response.body)});
+                                console.log('Data has been converted to Uint8Array, length:', byteArray.length);
 
-                unpacked_data = msgpack.unpackb(bytes(result))
-                captcha_payload = CaptchaPayload(**unpacked_data)
+                                try {{
+                                    const hswResult = await hsw(0, byteArray);
+                                    return Array.from(hswResult);
+                                }} catch (e) {{
+                                    return {{error: e.toString()}};
+                                }}
+                            }}
+                        """)
 
-                self._captcha_payload_queue.put_nowait(captcha_payload)
+                        if isinstance(result, list) and not any(isinstance(x, dict) and "error" in x for x in result):
+                            unpacked_data = msgpack.unpackb(bytes(result))
+                            captcha_payload = CaptchaPayload(**unpacked_data)
+
+                            self._captcha_payload_queue.put_nowait(captcha_payload)
             elif '/checkcaptcha' in packet.url:
                 metadata = packet.response.body
                 self._captcha_response_queue.put_nowait(CaptchaResponse(**metadata))
                 
     def _review_challenge_type(self) -> RequestType | ChallengeTypeEnum:
-        
         try:
             self._captcha_payload = self._captcha_payload_queue.get(timeout=30)
         except Empty:
@@ -229,8 +244,8 @@ class AgentV:
         # Match: Success
         if cr.is_pass:
             logger.success("Challenge success")
-            self._cache_validated_captcha_response(cr)
+            # self._cache_validated_captcha_response(cr)
             return ChallengeSignal.SUCCESS
-
+        
         return ChallengeSignal.FAILURE
 
