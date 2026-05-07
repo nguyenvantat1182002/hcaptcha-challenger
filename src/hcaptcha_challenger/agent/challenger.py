@@ -207,9 +207,7 @@ class AgentV:
         # ----------------------------------------------------------------------
         if self._captcha_response_queue.empty():
             result = self._solve_captcha()
-            if result is None:
-                return ChallengeSignal.SUCCESS
-            elif not result:
+            if isinstance(result, bool) and not result:
                 return ChallengeSignal.FAILURE
             
         # Waiting for hCAPTCHA response processing result
