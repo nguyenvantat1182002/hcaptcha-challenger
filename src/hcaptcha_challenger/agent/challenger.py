@@ -88,6 +88,7 @@ class AgentV:
                 except Exception:
                     self._captcha_payload_queue.put_nowait(None)
                     traceback.print_exc()
+                    return
             elif '/checkcaptcha' in packet.url:
                 try:
                     metadata = packet.response.body
@@ -207,7 +208,9 @@ class AgentV:
         # ----------------------------------------------------------------------
         if self._captcha_response_queue.empty():
             result = self._solve_captcha()
-            if isinstance(result, bool) and not result:
+            if result is None:
+                return ChallengeSignal.SUCCESS
+            elif not result:
                 return ChallengeSignal.FAILURE
             
         # Waiting for hCAPTCHA response processing result
