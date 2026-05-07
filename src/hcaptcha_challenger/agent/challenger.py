@@ -8,6 +8,7 @@ import time
 import threading
 import json
 import msgpack
+import traceback
 
 from queue import Queue, Empty
 from datetime import datetime
@@ -63,45 +64,48 @@ class AgentV:
             
     def _task_handler(self):
         for packet in self.page.listen.steps():
-            if '/getcaptcha' in packet.url:
-                match packet.response.headers.get('content-type', ''):
-                    case 'application/json':
-                        data = packet.response.body
-                        
-                        if data.get("pass"):
-                            while not self._captcha_response_queue.empty():
-                                self._captcha_response_queue.get_nowait()
-
-                            cr = CaptchaResponse(**data)
-                            self._captcha_response_queue.put_nowait(cr)
+            try:
+                if '/getcaptcha' in packet.url:
+                    match packet.response.headers.get('content-type', ''):
+                        case 'application/json':
+                            data = packet.response.body
                             
-                        if data.get("request_config"):
-                            captcha_payload = CaptchaPayload(**data)
-                            self._captcha_payload_queue.put_nowait(captcha_payload)
-                    case 'application/octet-stream':
-                        result = self.page.run_js(f"""
-                            async function() {{
-                                const byteArray = new Uint8Array({list(packet.response.body)});
-                                console.log('Data has been converted to Uint8Array, length:', byteArray.length);
+                            if data.get("pass"):
+                                while not self._captcha_response_queue.empty():
+                                    self._captcha_response_queue.get_nowait()
 
-                                try {{
-                                    const hswResult = await hsw(0, byteArray);
-                                    return Array.from(hswResult);
-                                }} catch (e) {{
-                                    return {{error: e.toString()}};
+                                cr = CaptchaResponse(**data)
+                                self._captcha_response_queue.put_nowait(cr)
+                                
+                            if data.get("request_config"):
+                                captcha_payload = CaptchaPayload(**data)
+                                self._captcha_payload_queue.put_nowait(captcha_payload)
+                        case 'application/octet-stream':
+                            result = self.page.run_js(f"""
+                                async function() {{
+                                    const byteArray = new Uint8Array({list(packet.response.body)});
+                                    console.log('Data has been converted to Uint8Array, length:', byteArray.length);
+
+                                    try {{
+                                        const hswResult = await hsw(0, byteArray);
+                                        return Array.from(hswResult);
+                                    }} catch (e) {{
+                                        return {{error: e.toString()}};
+                                    }}
                                 }}
-                            }}
-                        """)
+                            """)
 
-                        if isinstance(result, list) and not any(isinstance(x, dict) and "error" in x for x in result):
-                            unpacked_data = msgpack.unpackb(bytes(result))
-                            captcha_payload = CaptchaPayload(**unpacked_data)
+                            if isinstance(result, list) and not any(isinstance(x, dict) and "error" in x for x in result):
+                                unpacked_data = msgpack.unpackb(bytes(result))
+                                captcha_payload = CaptchaPayload(**unpacked_data)
 
-                            self._captcha_payload_queue.put_nowait(captcha_payload)
-            elif '/checkcaptcha' in packet.url:
-                metadata = packet.response.body
-                self._captcha_response_queue.put_nowait(CaptchaResponse(**metadata))
-                
+                                self._captcha_payload_queue.put_nowait(captcha_payload)
+                elif '/checkcaptcha' in packet.url:
+                    metadata = packet.response.body
+                    self._captcha_response_queue.put_nowait(CaptchaResponse(**metadata))
+            except Exception:
+                traceback.print_exc()
+
     def _review_challenge_type(self) -> RequestType | ChallengeTypeEnum:
         try:
             self._captcha_payload = self._captcha_payload_queue.get(timeout=30)
