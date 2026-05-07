@@ -220,15 +220,15 @@ class AgentV:
 
         while not cr:
             if time.monotonic() > end_time:
-                return ChallengeSignal.EXECUTION_TIMEOUT
-                
+                break
+            
             if not self._captcha_response_queue.empty():
                 cr = self._captcha_response_queue.get_nowait()
             else:
                 time.sleep(1)
                 
         # Match: Timeout / Loss
-        if not cr or not cr.is_pass:
+        if not cr or (cr and not cr.is_pass):
             return ChallengeSignal.FAILURE
             
         # Match: Success
