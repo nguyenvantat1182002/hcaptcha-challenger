@@ -120,7 +120,9 @@ class AgentV:
             request_type = self._captcha_payload.request_type
             tasklist = self._captcha_payload.tasklist
             tasklist_length = len(tasklist)
+
             self.robotic_arm.captcha_payload = self._captcha_payload
+
             match request_type:
                 case RequestType.IMAGE_LABEL_BINARY:
                     self.robotic_arm.signal_crumb_count = int(tasklist_length / 9)
@@ -142,10 +144,7 @@ class AgentV:
                         if len(tasklist[0].entities) == 1
                         else ChallengeTypeEnum.IMAGE_DRAG_MULTI
                     )
-
-            logger.warning(f"Unknown request_type: {request_type=}")
-
-            return None
+                
         except Exception as err:
             logger.error(f"Error parsing challenge type: {err}")
 
