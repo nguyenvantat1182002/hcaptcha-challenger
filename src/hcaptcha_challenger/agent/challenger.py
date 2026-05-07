@@ -64,8 +64,8 @@ class AgentV:
             
     def _task_handler(self):
         for packet in self.page.listen.steps():
-            try:
-                if '/getcaptcha' in packet.url:
+            if '/getcaptcha' in packet.url:
+                try:
                     result = self.page.run_js(f"""
                         async function() {{
                             const byteArray = new Uint8Array({list(packet.response.body)});
@@ -85,15 +85,18 @@ class AgentV:
                         captcha_payload = CaptchaPayload(**unpacked_data)
                         
                         self._captcha_payload_queue.put_nowait(captcha_payload)
-                elif '/checkcaptcha' in packet.url:
+                except Exception:
+                    self._captcha_payload_queue.put_nowait(None)
+                    traceback.print_exc()
+            elif '/checkcaptcha' in packet.url:
+                try:
                     metadata = packet.response.body
                     self._captcha_response_queue.put_nowait(CaptchaResponse(**metadata))
-            except Exception:
-                self._captcha_payload_queue.put_nowait(None)
-                traceback.print_exc()
-            finally:
-                return
-            
+                except Exception:
+                    traceback.print_exc()
+                finally:
+                    return
+                
     def _review_challenge_type(self) -> RequestType | ChallengeTypeEnum:
         try:
             self._captcha_payload = self._captcha_payload_queue.get(timeout=30)
