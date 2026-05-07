@@ -225,12 +225,8 @@ class AgentV:
             if not self._captcha_response_queue.empty():
                 cr = self._captcha_response_queue.get_nowait()
             else:
-                body = self.page.ele('tag:body')
-                if bool(body.attr('aria-hidden')):
-                    return ChallengeSignal.FAILURE
-            
-            time.sleep(1)
-            
+                time.sleep(1)
+                
         # Match: Timeout / Loss
         if not cr or not cr.is_pass:
             return ChallengeSignal.FAILURE
