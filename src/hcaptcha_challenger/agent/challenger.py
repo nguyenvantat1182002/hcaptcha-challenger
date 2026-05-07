@@ -144,7 +144,6 @@ class AgentV:
                         if len(tasklist[0].entities) == 1
                         else ChallengeTypeEnum.IMAGE_DRAG_MULTI
                     )
-                
         except Exception as err:
             logger.error(f"Error parsing challenge type: {err}")
 
@@ -153,8 +152,6 @@ class AgentV:
 
     def _solve_captcha(self) -> ChallengeSignal:
         challenge_type = self._review_challenge_type()
-        if not challenge_type:
-            return None
         logger.debug(f"Start Challenge - type={challenge_type.value} count={self.robotic_arm.signal_crumb_count}")
         
         # {{< Skip specific challenge questions >}}
