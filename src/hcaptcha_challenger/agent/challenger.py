@@ -63,7 +63,7 @@ class AgentV:
             logger.error(f"Saving captcha response failed - {err}")
             
     def _task_handler(self):
-        for packet in self.page.listen.steps():
+        for packet in self.page.listen.steps(timeout=120):
             if '/getcaptcha' in packet.url:
                 try:
                     result = self.page.run_js(f"""
