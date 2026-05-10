@@ -32,20 +32,25 @@ class HCaptchaBlockedError(Exception):
 
 
 class AgentV:
-    def __init__(self, page: ChromiumFrame, agent_config: AgentConfig):
+    def __init__(self, page: ChromiumFrame, agent_config: AgentConfig, target_url: str = None):
         self.page = page
         self.config = agent_config
-
+        self.target_url = target_url
+        
         self.robotic_arm = RoboticArm(page=page, config=agent_config)
-
+        
         self._captcha_payload: CaptchaPayload | None = None
         self._captcha_payload_queue: Queue[CaptchaPayload | None] = Queue()
         self._captcha_response_queue: Queue[CaptchaResponse] = Queue()
         self.cr_list: List[CaptchaResponse] = []
         
-        self.page.listen.start(['/getcaptcha', '/checkcaptcha'])
+        targets = ['/getcaptcha', '/checkcaptcha']
+        if self.target_url:
+            targets.append(self.target_url)
+            
+        self.page.listen.start(targets)
         threading.Thread(target=self._task_handler, daemon=True).start()
-
+        
     def _cache_validated_captcha_response(self, cr: CaptchaResponse):
         if not cr.is_pass:
             return
@@ -64,7 +69,9 @@ class AgentV:
             
     def _task_handler(self):
         for packet in self.page.listen.steps(timeout=120):
-            if '/getcaptcha' in packet.url:
+            url = packet.url
+            
+            if '/getcaptcha' in url:
                 try:
                     result = self.page.run_js(f"""
                         async function() {{
@@ -89,7 +96,7 @@ class AgentV:
                     self._captcha_payload_queue.put_nowait(None)
                     traceback.print_exc()
                     return
-            elif '/checkcaptcha' in packet.url:
+            elif '/checkcaptcha' in url:
                 try:
                     metadata = packet.response.body
                     self._captcha_response_queue.put_nowait(CaptchaResponse(**metadata))
@@ -97,7 +104,10 @@ class AgentV:
                     traceback.print_exc()
                 finally:
                     return
-                
+            elif self.target_url and self.target_url in url:
+                self._captcha_payload_queue.put_nowait(None)
+                return
+            
     def _review_challenge_type(self) -> RequestType | ChallengeTypeEnum:
         try:
             self._captcha_payload = self._captcha_payload_queue.get(timeout=30)
