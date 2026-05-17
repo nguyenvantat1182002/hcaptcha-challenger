@@ -124,18 +124,22 @@ class RoboticArm:
         self._challenge_router = ChallengeRouter(
             openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.CHALLENGE_CLASSIFIER_MODEL,
+            verify_ssl=self.config.VERIFY_SSL,
         )
         self._image_classifier = ImageClassifier(
             openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.IMAGE_CLASSIFIER_MODEL,
+            verify_ssl=self.config.VERIFY_SSL,
         )
         self._spatial_path_reasoner = SpatialPathReasoner(
             openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.SPATIAL_PATH_REASONER_MODEL,
+            verify_ssl=self.config.VERIFY_SSL,
         )
         self._spatial_point_reasoner = SpatialPointReasoner(
             openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.SPATIAL_POINT_REASONER_MODEL,
+            verify_ssl=self.config.VERIFY_SSL,
         )
         self._skill_manager = SkillManager(agent_config=config)
         self.signal_crumb_count: int | None = None

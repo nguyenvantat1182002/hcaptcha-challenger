@@ -72,6 +72,11 @@ class AgentConfig(BaseSettings):
         default=30,
         description="When your local network is poor, increase this value appropriately [unit: second]",
     )
+    VERIFY_SSL: bool = Field(
+        default=True,
+        description="Enable/disable SSL certificate verification for network requests. "
+        "Useful for debugging tools like HTTP Debugger Pro.",
+    )
     WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS: int = Field(
         default=1500,
         description="When your local network is poor, increase this value appropriately [unit: millisecond]",

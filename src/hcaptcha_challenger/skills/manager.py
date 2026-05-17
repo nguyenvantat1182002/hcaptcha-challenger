@@ -208,9 +208,10 @@ class SkillManager:
 
         repo = self._config.skills_update_repo
         branch = self._config.skills_update_branch
+        verify = self._config.VERIFY_SSL
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, verify=verify) as client:
                 # 1. Download and parse manifest
                 manifest_url = SkillManifest.get_download_url(repo, branch)
                 remote_manifest = await self._download_manifest(client, manifest_url)
@@ -223,7 +224,7 @@ class SkillManager:
                 self._cache_library_path.mkdir(parents=True, exist_ok=True)
 
                 # 3. Save rules.yaml
-                async with httpx.AsyncClient(timeout=10.0) as manifest_client:
+                async with httpx.AsyncClient(timeout=10.0, verify=verify) as manifest_client:
                     resp = await manifest_client.get(manifest_url)
                     resp.raise_for_status()
                     self._cache_rules_path.write_text(resp.text, encoding="utf-8")

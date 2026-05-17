@@ -1,3 +1,5 @@
+import time
+
 from DrissionPage import ChromiumPage, ChromiumOptions
 from hcaptcha_challenger import AgentV, AgentConfig
 
@@ -6,6 +8,9 @@ opts = ChromiumOptions().auto_port()
 page = ChromiumPage(addr_or_opts=opts)
 
 page.get('https://account.riotgames.com/')
+
+
+time.sleep(10)
 
 frame = page.get_frame("css://iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=challenge')]")
 

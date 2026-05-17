@@ -28,16 +28,18 @@ class OpenRouterProvider:
     OpenRouter-based chat provider implementation.
     """
 
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, verify_ssl: bool = True):
         """
         Initialize the OpenRouter provider.
 
         Args:
             api_key: OpenRouter API key.
             model: Model name to use (e.g., "google/gemini-2.5-pro").
+            verify_ssl: Whether to verify SSL certificates.
         """
         self._api_key = api_key
         self._model = model
+        self._verify_ssl = verify_ssl
         self._client: OpenAI | None = None
         self._response = None
 
@@ -45,9 +47,12 @@ class OpenRouterProvider:
     def client(self) -> OpenAI:
         """Lazy-initialize the OpenAI client pointed to OpenRouter."""
         if self._client is None:
+            import httpx
+            http_client = httpx.Client(verify=self._verify_ssl)
             self._client = OpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=self._api_key,
+                http_client=http_client,
             )
         return self._client
 

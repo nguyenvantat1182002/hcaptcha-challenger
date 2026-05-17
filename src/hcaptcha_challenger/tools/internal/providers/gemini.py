@@ -38,16 +38,18 @@ class GeminiProvider:
     swap out for other providers in the future.
     """
 
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, verify_ssl: bool = True):
         """
         Initialize the Gemini provider.
 
         Args:
             api_key: Gemini API key.
             model: Model name to use (e.g., "gemini-2.5-pro").
+            verify_ssl: Whether to verify SSL certificates.
         """
         self._api_key = api_key
         self._model = model
+        self._verify_ssl = verify_ssl
         self._client: genai.Client | None = None
         self._response: types.GenerateContentResponse | None = None
 
@@ -55,6 +57,9 @@ class GeminiProvider:
     def client(self) -> genai.Client:
         """Lazy-initialize the Gemini client."""
         if self._client is None:
+            # Note: google-genai SDK currently doesn't expose an easy way 
+            # to disable SSL verification via the Client constructor.
+            # This would require a custom http_client if supported.
             self._client = genai.Client(api_key=self._api_key)
         return self._client
 

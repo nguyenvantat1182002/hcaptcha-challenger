@@ -49,6 +49,7 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
         model: ModelT | None = None,
         *,
         provider: ChatProvider | None = None,
+        verify_ssl: bool = True,
         **kwargs,
     ):
         """
@@ -58,16 +59,18 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
             openrouter_api_key: OpenRouter API key (used if no custom provider is set).
             model: Model name to use.
             provider: Optional custom provider (for extensibility).
+            verify_ssl: Whether to verify SSL certificates.
             **kwargs: Additional options for subclasses.
         """
         self._api_key = openrouter_api_key
         self._model = model
+        self._verify_ssl = verify_ssl
         self._provider: ChatProvider = provider or self._create_default_provider()
         self._response = None
 
     def _create_default_provider(self) -> OpenRouterProvider:
         """Create the default OpenRouter provider."""
-        return OpenRouterProvider(api_key=self._api_key, model=self._model)
+        return OpenRouterProvider(api_key=self._api_key, model=self._model, verify_ssl=self._verify_ssl)
 
     @abstractmethod
     async def __call__(self, *args, **kwargs) -> ResponseT:
