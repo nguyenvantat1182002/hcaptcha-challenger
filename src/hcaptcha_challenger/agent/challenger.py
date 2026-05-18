@@ -32,10 +32,10 @@ class HCaptchaBlockedError(Exception):
 
 
 class AgentV:
-    def __init__(self, page: ChromiumFrame, agent_config: AgentConfig, target_url: str | List[str] = None):
+    def __init__(self, page: ChromiumFrame, agent_config: AgentConfig, target_urls: str | List[str] = None):
         self.page = page
         self.config = agent_config
-        self.target_url = target_url
+        self.target_urls = target_urls
         
         self.robotic_arm = RoboticArm(page=page, config=agent_config)
         
@@ -48,21 +48,21 @@ class AgentV:
         self._checkcaptcha_error = False
         
         targets = ['/getcaptcha', '/checkcaptcha']
-        if self.target_url:
-            if isinstance(self.target_url, list):
-                targets.extend(self.target_url)
+        if self.target_urls:
+            if isinstance(self.target_urls, list):
+                targets.extend(self.target_urls)
             else:
-                targets.append(self.target_url)
+                targets.append(self.target_urls)
             
         self.page.listen.start(targets)
         threading.Thread(target=self._task_handler, daemon=True).start()
 
-    def _is_target_url(self, url: str) -> bool:
-        if not self.target_url:
+    def _is_target_urls(self, url: str) -> bool:
+        if not self.target_urls:
             return False
-        if isinstance(self.target_url, list):
-            return any(target in url for target in self.target_url)
-        return self.target_url in url
+        if isinstance(self.target_urls, list):
+            return any(target in url for target in self.target_urls)
+        return self.target_urls in url
 
     def _task_handler(self):
         for packet in self.page.listen.steps(timeout=120):
@@ -110,7 +110,7 @@ class AgentV:
                     traceback.print_exc()
                 finally:
                     return
-            elif self._is_target_url(url):
+            elif self._is_target_urls(url):
                 self._captcha_payload_queue.put_nowait(None)
                 return
             
