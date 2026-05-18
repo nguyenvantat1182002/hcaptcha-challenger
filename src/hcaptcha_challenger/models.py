@@ -97,6 +97,7 @@ class ChallengeSignal(str, Enum):
     RETRY = "retry"
     QR_DATA_NOT_FOUND = "qr_data_not_found"
     GET_CAPTCHA_FAILED = "get_captcha_failed"
+    CHECK_CAPTCHA_FAILED = "check_captcha_failed"
     EXECUTION_TIMEOUT = "challenge_execution_timeout"
     RESPONSE_TIMEOUT = "challenge_response_timeout"
 

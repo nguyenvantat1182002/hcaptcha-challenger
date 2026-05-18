@@ -32,10 +32,10 @@ class HCaptchaBlockedError(Exception):
 
 
 class AgentV:
-    def __init__(self, page: ChromiumFrame, agent_config: AgentConfig, target_urls: str | List[str] = None):
+    def __init__(self, page: ChromiumFrame, agent_config: AgentConfig, target_url: str | List[str] = None):
         self.page = page
         self.config = agent_config
-        self.target_urls = target_urls
+        self.target_url = target_url
         
         self.robotic_arm = RoboticArm(page=page, config=agent_config)
         
@@ -45,23 +45,24 @@ class AgentV:
         self.cr_list: List[CaptchaResponse] = []
         
         self._getcaptcha_error = False
+        self._checkcaptcha_error = False
         
         targets = ['/getcaptcha', '/checkcaptcha']
-        if self.target_urls:
-            if isinstance(self.target_urls, list):
-                targets.extend(self.target_urls)
+        if self.target_url:
+            if isinstance(self.target_url, list):
+                targets.extend(self.target_url)
             else:
-                targets.append(self.target_urls)
-                
+                targets.append(self.target_url)
+            
         self.page.listen.start(targets)
         threading.Thread(target=self._task_handler, daemon=True).start()
 
     def _is_target_url(self, url: str) -> bool:
-        if not self.target_urls:
+        if not self.target_url:
             return False
-        if isinstance(self.target_urls, list):
-            return any(target in url for target in self.target_urls)
-        return self.target_urls in url
+        if isinstance(self.target_url, list):
+            return any(target in url for target in self.target_url)
+        return self.target_url in url
 
     def _task_handler(self):
         for packet in self.page.listen.steps(timeout=120):
@@ -98,6 +99,10 @@ class AgentV:
                     traceback.print_exc()
                     return
             elif '/checkcaptcha' in url:
+                if packet.response.status != 200:
+                    self._checkcaptcha_error = True
+                    return
+
                 try:
                     metadata = packet.response.body
                     self._captcha_response_queue.put_nowait(CaptchaResponse(**metadata))
@@ -235,6 +240,9 @@ class AgentV:
         cr = None
 
         while not cr:
+            if self._checkcaptcha_error:
+                return ChallengeSignal.CHECK_CAPTCHA_FAILED
+                
             if time.monotonic() > end_time:
                 break
             
