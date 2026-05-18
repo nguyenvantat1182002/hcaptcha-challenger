@@ -32,10 +32,10 @@ class HCaptchaBlockedError(Exception):
 
 
 class AgentV:
-    def __init__(self, page: ChromiumFrame, agent_config: AgentConfig, target_url: str = None):
+    def __init__(self, page: ChromiumFrame, agent_config: AgentConfig, target_urls: str | List[str] = None):
         self.page = page
         self.config = agent_config
-        self.target_url = target_url
+        self.target_urls = target_urls
         
         self.robotic_arm = RoboticArm(page=page, config=agent_config)
         
@@ -44,34 +44,35 @@ class AgentV:
         self._captcha_response_queue: Queue[CaptchaResponse] = Queue()
         self.cr_list: List[CaptchaResponse] = []
         
+        self._getcaptcha_error = False
+        
         targets = ['/getcaptcha', '/checkcaptcha']
-        if self.target_url:
-            targets.append(self.target_url)
-            
+        if self.target_urls:
+            if isinstance(self.target_urls, list):
+                targets.extend(self.target_urls)
+            else:
+                targets.append(self.target_urls)
+                
         self.page.listen.start(targets)
         threading.Thread(target=self._task_handler, daemon=True).start()
-        
-    def _cache_validated_captcha_response(self, cr: CaptchaResponse):
-        if not cr.is_pass:
-            return
-            
-        self.cr_list.append(cr)
 
-        try:
-            captcha_response = cr.model_dump(mode="json", by_alias=True)
-            current_time = datetime.now().strftime("%Y%m%d/%Y%m%d%H%M%S%f")
-            cache_path = self.config.captcha_response_dir.joinpath(f"{current_time}.json")
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            t = json.dumps(captcha_response, indent=2, ensure_ascii=False)
-            cache_path.write_text(t, encoding="utf-8")
-        except Exception as err:
-            logger.error(f"Saving captcha response failed - {err}")
-            
+    def _is_target_url(self, url: str) -> bool:
+        if not self.target_urls:
+            return False
+        if isinstance(self.target_urls, list):
+            return any(target in url for target in self.target_urls)
+        return self.target_urls in url
+
     def _task_handler(self):
         for packet in self.page.listen.steps(timeout=120):
             url = packet.url
             
             if '/getcaptcha' in url:
+                if packet.response.status != 200:
+                    self._getcaptcha_error = True
+                    self._captcha_payload_queue.put_nowait(None)
+                    return
+
                 try:
                     result = self.page.run_js(f"""
                         async function() {{
@@ -104,7 +105,7 @@ class AgentV:
                     traceback.print_exc()
                 finally:
                     return
-            elif self.target_url and self.target_url in url:
+            elif self._is_target_url(url):
                 self._captcha_payload_queue.put_nowait(None)
                 return
             
@@ -218,6 +219,8 @@ class AgentV:
         # ----------------------------------------------------------------------
         if self._captcha_response_queue.empty():
             result = self._solve_captcha()
+            if self._getcaptcha_error:
+                return ChallengeSignal.GET_CAPTCHA_FAILED
             if result is None:
                 return ChallengeSignal.SUCCESS
             elif not result:
@@ -251,4 +254,3 @@ class AgentV:
             return ChallengeSignal.SUCCESS
         
         return ChallengeSignal.FAILURE
-
