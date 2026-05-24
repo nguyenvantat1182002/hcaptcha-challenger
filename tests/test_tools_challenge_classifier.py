@@ -103,7 +103,7 @@ class TestChallengeClassifier:
         return ChallengeClassifier(openrouter_api_key=api_key)
 
     @pytest.mark.parametrize("image_file, expected_type_enum", generate_individual_test_cases())
-    async def test_challenge_classifier(
+    def test_challenge_classifier(
         self,
         classifier: ChallengeClassifier,
         image_file: Path,
@@ -111,7 +111,7 @@ class TestChallengeClassifier:
     ):
         """Test challenge classification for a single image file."""
 
-        result = await classifier(challenge_screenshot=image_file, model=TEST_MODEL)
+        result = classifier(challenge_screenshot=image_file, model=TEST_MODEL)
 
         assert isinstance(result, ChallengeRouterResult), (
             f"Classifier for '{image_file.name}' returned type "
@@ -126,7 +126,7 @@ class TestChallengeClassifier:
         )
 
 
-async def test_challenge_classifier():
+def test_challenge_classifier_standalone():
     challenge_dir = Path(__file__).parent / "challenge_view"
     api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY")
     challenge_router = ChallengeRouter(openrouter_api_key=api_key)
@@ -149,6 +149,6 @@ async def test_challenge_classifier():
     for g in groups:
         for t in groups[g]:
             s = random.choice(groups[g][t]["samples"])
-            result = await challenge_router(challenge_screenshot=s)
+            result = challenge_router(challenge_screenshot=s)
             assert result.challenge_prompt
             assert result.challenge_type == groups[g][t]["type"]

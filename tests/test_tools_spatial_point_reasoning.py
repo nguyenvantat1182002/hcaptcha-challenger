@@ -13,7 +13,7 @@ from hcaptcha_challenger.helper.visualize_attention_points import show_answer_po
 
 dotenv.load_dotenv()
 spr = SpatialPointReasoner(
-    gemini_api_key=os.getenv("GEMINI_API_KEY"), model="gemini-3-flash-preview"
+    openrouter_api_key=os.getenv("OPENROUTER_API_KEY") or os.getenv("GEMINI_API_KEY"), model="gemini-3-flash-preview"
 )
 
 CHALLENGE_VIEW_DIR = Path(__file__).parent.joinpath("challenge_view/image_label_area_select")
@@ -43,7 +43,7 @@ def _collect_image_files(input_dir: Path = CHALLENGE_VIEW_DIR) -> list[Path]:
 
 # noinspection DuplicatedCode
 @pytest.mark.parametrize("challenge_screenshot", _collect_image_files())
-async def test_gemini_point_reasoning(challenge_screenshot: Path):
+def test_gemini_point_reasoning(challenge_screenshot: Path):
     grid_divisions_path = challenge_screenshot.parent.joinpath(
         f'coordinate_grid_{challenge_screenshot.name}'
     )
@@ -52,7 +52,7 @@ async def test_gemini_point_reasoning(challenge_screenshot: Path):
     grid_divisions_image = create_coordinate_grid(challenge_screenshot, bbox)
     plt.imsave(str(grid_divisions_path.resolve()), grid_divisions_image)
 
-    results = await spr(
+    results = spr(
         challenge_screenshot=challenge_screenshot, grid_divisions=grid_divisions_path
     )
     logger.debug(f'ToolInvokeMessage: {results.log_message}')
@@ -73,15 +73,14 @@ async def test_gemini_point_reasoning(challenge_screenshot: Path):
     logger.info(f"Saved answer visualization to {save_path}")
 
 
-async def test_gemini_point_reasoning_concurrent():
-    """Process all challenge screenshots concurrently using asyncio.gather"""
+def test_gemini_point_reasoning_sequential():
+    """Process all challenge screenshots sequentially"""
     challenge_screenshots = _collect_image_files()
 
     if not challenge_screenshots:
         pytest.skip("No challenge screenshots found")
 
-    # noinspection DuplicatedCode
-    async def process_single_image(challenge_screenshot: Path):
+    def process_single_image(challenge_screenshot: Path):
         """Process a single challenge screenshot"""
         grid_divisions_path = challenge_screenshot.parent.joinpath(
             f'coordinate_grid_{challenge_screenshot.name}'
@@ -91,7 +90,7 @@ async def test_gemini_point_reasoning_concurrent():
         grid_divisions_image = create_coordinate_grid(challenge_screenshot, bbox)
         plt.imsave(str(grid_divisions_path.resolve()), grid_divisions_image)
 
-        results_ = await spr(
+        results_ = spr(
             challenge_screenshot=challenge_screenshot, grid_divisions=grid_divisions_path
         )
         logger.debug(f'ToolInvokeMessage for {challenge_screenshot.name}: {results_.log_message}')
@@ -113,7 +112,7 @@ async def test_gemini_point_reasoning_concurrent():
 
         return challenge_screenshot.name
 
-    # Process all images concurrently
-    logger.info(f"Processing {len(challenge_screenshots)} images concurrently...")
-    results = await asyncio.gather(*[process_single_image(img) for img in challenge_screenshots])
-    logger.success(f"Successfully processed {len(results)} images concurrently: {results}")
+    # Process all images sequentially
+    logger.info(f"Processing {len(challenge_screenshots)} images sequentially...")
+    results = [process_single_image(img) for img in challenge_screenshots]
+    logger.success(f"Successfully processed {len(results)} images sequentially: {results}")

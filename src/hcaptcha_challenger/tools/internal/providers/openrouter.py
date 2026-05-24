@@ -71,6 +71,7 @@ class OpenRouterProvider:
         response_schema: Type[ResponseT],
         user_prompt: str | None = None,
         description: str | None = None,
+        timeout: float | None = None,
         **kwargs,
     ) -> ResponseT:
         """
@@ -129,6 +130,7 @@ class OpenRouterProvider:
                     "strict": False
                 }
             },
+            timeout=timeout,
             **kwargs,
         )
 

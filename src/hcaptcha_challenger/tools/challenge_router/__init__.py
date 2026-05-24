@@ -66,6 +66,7 @@ Your task is to classify challenge questions into one of four types:
 """,
             description=self.description,
             response_schema=ChallengeRouterResult,
+            timeout=kwargs.pop("timeout", self._timeout),
             **kwargs,
         )
 

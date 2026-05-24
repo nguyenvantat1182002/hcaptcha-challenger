@@ -60,5 +60,6 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
             user_prompt="Solve the challenge, use [0,0] ~ [2,2] to locate 9grid, output the coordinates of the correct answer as JSON.",
             description=self.description,
             response_schema=ImageBinaryChallenge,
+            timeout=kwargs.pop("timeout", self._timeout),
             **kwargs,
         )

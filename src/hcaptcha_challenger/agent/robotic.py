@@ -125,21 +125,25 @@ class RoboticArm:
             openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.CHALLENGE_CLASSIFIER_MODEL,
             verify_ssl=self.config.VERIFY_SSL,
+            timeout=self.config.RESPONSE_TIMEOUT,
         )
         self._image_classifier = ImageClassifier(
             openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.IMAGE_CLASSIFIER_MODEL,
             verify_ssl=self.config.VERIFY_SSL,
+            timeout=self.config.RESPONSE_TIMEOUT,
         )
         self._spatial_path_reasoner = SpatialPathReasoner(
             openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.SPATIAL_PATH_REASONER_MODEL,
             verify_ssl=self.config.VERIFY_SSL,
+            timeout=self.config.RESPONSE_TIMEOUT,
         )
         self._spatial_point_reasoner = SpatialPointReasoner(
             openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
             model=self.config.SPATIAL_POINT_REASONER_MODEL,
             verify_ssl=self.config.VERIFY_SSL,
+            timeout=self.config.RESPONSE_TIMEOUT,
         )
         self._skill_manager = SkillManager(agent_config=config)
         self.signal_crumb_count: int | None = None
@@ -513,10 +517,19 @@ class RoboticArm:
                 path=cache_key.joinpath(f"{cache_key.name}_{cid}_model_answer.json")
             )
 
-            # Scale model coordinates from 0-1000 normalized space to real pixel space
+            # Deduplicate coordinates and scale from 0-1000 normalized space to real pixel space
             scale_x = real_bbox['width'] / 1000
             scale_y = real_bbox['height'] / 1000
-            for point in response.points:
+            
+            seen_points = set()
+            unique_points = []
+            for p in response.points:
+                point_tuple = (p.x, p.y)
+                if point_tuple not in seen_points:
+                    seen_points.add(point_tuple)
+                    unique_points.append(p)
+            
+            for point in unique_points:
                 px = real_bbox['x'] + point.x * scale_x
                 py = real_bbox['y'] + point.y * scale_y
                 self.click_at(px, py)

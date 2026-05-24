@@ -6,12 +6,10 @@
 
 import time
 import threading
-import json
 import msgpack
 import traceback
 
 from queue import Queue, Empty
-from datetime import datetime
 from typing import List
 from loguru import logger
 from DrissionPage._pages.chromium_frame import ChromiumFrame

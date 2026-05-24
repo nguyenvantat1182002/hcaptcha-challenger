@@ -34,6 +34,7 @@ class ChatProvider(Protocol[ResponseT]):
         response_schema: type[ResponseT],
         user_prompt: str | None = None,
         description: str | None = None,
+        timeout: float | None = None,
         **kwargs,
     ) -> ResponseT:
         """
@@ -44,6 +45,7 @@ class ChatProvider(Protocol[ResponseT]):
             response_schema: Pydantic model class for structured output.
             user_prompt: User-provided prompt/instructions.
             description: System instruction/description for the model.
+            timeout: Request timeout in seconds.
             **kwargs: Provider-specific options (e.g., thinking_level, temperature).
 
         Returns:

@@ -26,7 +26,7 @@ class SpatialBboxReasoner(SpatialReasoner[ImageBboxChallenge]):
 
     description: str = load_desc(Path(__file__).parent / "bbox.md")
 
-    async def __call__(
+    def __call__(
         self,
         *,
         challenge_screenshot: Union[str, Path],
@@ -47,7 +47,7 @@ class SpatialBboxReasoner(SpatialReasoner[ImageBboxChallenge]):
         Returns:
             ImageBboxChallenge containing the bounding box coordinates.
         """
-        return await self._invoke_spatial(
+        return self._invoke_spatial(
             challenge_screenshot=Path(challenge_screenshot),
             grid_divisions=Path(grid_divisions),
             auxiliary_information=auxiliary_information,

@@ -50,6 +50,7 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
         *,
         provider: ChatProvider | None = None,
         verify_ssl: bool = True,
+        timeout: float | None = None,
         **kwargs,
     ):
         """
@@ -60,11 +61,13 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
             model: Model name to use.
             provider: Optional custom provider (for extensibility).
             verify_ssl: Whether to verify SSL certificates.
+            timeout: Request timeout in seconds.
             **kwargs: Additional options for subclasses.
         """
         self._api_key = openrouter_api_key
         self._model = model
         self._verify_ssl = verify_ssl
+        self._timeout = timeout
         self._provider: ChatProvider = provider or self._create_default_provider()
         self._response = None
 
@@ -73,14 +76,14 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
         return OpenRouterProvider(api_key=self._api_key, model=self._model, verify_ssl=self._verify_ssl)
 
     @abstractmethod
-    async def __call__(self, *args, **kwargs) -> ResponseT:
+    def __call__(self, *args, **kwargs) -> ResponseT:
         """
-        Invoke the reasoning tool asynchronously.
+        Invoke the reasoning tool.
 
         Subclasses must implement this method with their specific logic.
 
         Usage:
-            result = await tool(challenge_screenshot=path)
+            result = tool(challenge_screenshot=path)
 
         Returns:
             The parsed response from the provider.

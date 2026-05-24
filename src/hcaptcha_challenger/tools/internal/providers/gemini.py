@@ -106,6 +106,7 @@ class GeminiProvider:
         response_schema: Type[ResponseT],
         user_prompt: str | None = None,
         description: str | None = None,
+        timeout: float | None = None,
         **kwargs,
     ) -> ResponseT:
         """
@@ -116,6 +117,7 @@ class GeminiProvider:
             user_prompt: User-provided prompt/instructions.
             description: System instruction/description for the model.
             response_schema: Pydantic model class for structured output.
+            timeout: Request timeout in seconds.
             **kwargs: Additional options passed to the API.
 
         Returns:
@@ -138,6 +140,9 @@ class GeminiProvider:
             response_mime_type="application/json",
             response_schema=response_schema,
         )
+
+        if timeout:
+            config.http_options = types.HttpOptions(timeout=timeout * 1000)
 
         actual_model = kwargs.pop("model", self._model)
 

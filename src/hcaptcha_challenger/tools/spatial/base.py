@@ -58,5 +58,6 @@ class SpatialReasoner(Reasoner[SCoTModelType, ResponseT], ABC):
             user_prompt=auxiliary_information,
             description=self.description,
             response_schema=response_schema,
+            timeout=kwargs.pop("timeout", self._timeout),
             **kwargs,
         )
