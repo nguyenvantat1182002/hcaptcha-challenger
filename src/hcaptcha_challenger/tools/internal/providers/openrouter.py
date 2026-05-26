@@ -56,6 +56,7 @@ class OpenRouterProvider:
                     base_url="https://openrouter.ai/api/v1",
                     api_key=self._api_key,
                     timeout=120.0,
+                    max_retries=0,
                 )
             else:
                 # Only use custom httpx client if we need to bypass SSL verification
@@ -64,13 +65,13 @@ class OpenRouterProvider:
                     base_url="https://openrouter.ai/api/v1",
                     api_key=self._api_key,
                     http_client=http_client,
+                    max_retries=0,
                 )
         return self._client
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_fixed(3),
-        retry=retry_if_not_exception_type((httpx.TimeoutException, TimeoutError, APITimeoutError)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retry request ({retry_state.attempt_number}/3) - "
             f"Wait 3 seconds - Exception: {retry_state.outcome.exception()}"

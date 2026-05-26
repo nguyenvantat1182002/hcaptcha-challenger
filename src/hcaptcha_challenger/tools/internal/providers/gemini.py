@@ -95,7 +95,6 @@ class GeminiProvider:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_fixed(3),
-        retry=retry_if_not_exception_type((httpx.TimeoutException, TimeoutError)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retry request ({retry_state.attempt_number}/3) - "
             f"Wait 3 seconds - Exception: {retry_state.outcome.exception()}"
