@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import List, Type, TypeVar, Any
 
 from loguru import logger
-from openai import OpenAI
+from openai import OpenAI, APITimeoutError
 from pydantic import BaseModel
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_not_exception_type
+import httpx
 
 ResponseT = TypeVar("ResponseT", bound=BaseModel)
 
@@ -69,6 +70,7 @@ class OpenRouterProvider:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_fixed(3),
+        retry=retry_if_not_exception_type((httpx.TimeoutException, TimeoutError, APITimeoutError)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retry request ({retry_state.attempt_number}/3) - "
             f"Wait 3 seconds - Exception: {retry_state.outcome.exception()}"

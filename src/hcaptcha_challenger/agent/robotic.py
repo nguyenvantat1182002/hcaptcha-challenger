@@ -323,17 +323,7 @@ class RoboticArm:
 
         return bbox
 
-    def _record_outcome(self, success: bool):
-        """Record the outcome of a challenge for telemetry."""
-        record = {
-            "timestamp": datetime.now().isoformat(),
-            "persona": self._persona_name,
-            "success": success
-        }
-        self.config.telemetry_dir.mkdir(parents=True, exist_ok=True)
-        telemetry_file = self.config.telemetry_dir.joinpath("telemetry.json")
-        with open(telemetry_file, "a") as f:
-            f.write(json.dumps(record) + "\n")
+
 
     @retry(
         stop=stop_after_attempt(3),
@@ -413,7 +403,11 @@ class RoboticArm:
             self.screenshot_element_in_frame(challenge_view, challenge_screenshot)
 
             # Image classification
-            response = self._image_classifier(challenge_screenshot=challenge_screenshot)
+            try:
+                response = self._image_classifier(challenge_screenshot=challenge_screenshot)
+            except Exception as e:
+                logger.error(f"Image classification failed: {e}")
+                return False
             sleep_ms(rand_range(self._human_cfg.recognition_delay))
             boolean_matrix = response.convert_box_to_boolean_matrix()
             
@@ -440,7 +434,6 @@ class RoboticArm:
                 submit_btn = frame_challenge.ele("css:div[class='button-submit button']")
                 self.click_element(submit_btn)
         
-        self._record_outcome(True)
         return True
 
     def challenge_image_drag_drop(self, job_type: ChallengeTypeEnum):
@@ -459,12 +452,16 @@ class RoboticArm:
             if job_type.value in self.config.MODEL_OVERRIDES:
                 kwargs["model"] = self.config.MODEL_OVERRIDES[job_type.value]
 
-            response = self._spatial_path_reasoner(
-                challenge_screenshot=raw,
-                grid_divisions=projection,
-                auxiliary_information=user_prompt,
-                **kwargs,
-            )
+            try:
+                response = self._spatial_path_reasoner(
+                    challenge_screenshot=raw,
+                    grid_divisions=projection,
+                    auxiliary_information=user_prompt,
+                    **kwargs,
+                )
+            except Exception as e:
+                logger.error(f"Spatial path reasoning failed: {e}")
+                return False
             sleep_ms(rand_range(self._human_cfg.recognition_delay))
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
             self._spatial_path_reasoner.cache_response(
@@ -486,7 +483,6 @@ class RoboticArm:
                 submit_btn = frame_challenge.ele("css:div[class='button-submit button']")
                 self.click_element(submit_btn)
 
-        self._record_outcome(True)
         return True
 
     def challenge_image_label_select(self, job_type: ChallengeTypeEnum):
@@ -505,12 +501,16 @@ class RoboticArm:
             if job_type.value in self.config.MODEL_OVERRIDES:
                 kwargs["model"] = self.config.MODEL_OVERRIDES[job_type.value]
 
-            response = self._spatial_point_reasoner(
-                challenge_screenshot=raw,
-                grid_divisions=projection,
-                auxiliary_information=user_prompt,
-                **kwargs,
-            )
+            try:
+                response = self._spatial_point_reasoner(
+                    challenge_screenshot=raw,
+                    grid_divisions=projection,
+                    auxiliary_information=user_prompt,
+                    **kwargs,
+                )
+            except Exception as e:
+                logger.error(f"Spatial point reasoning failed: {e}")
+                return False
             sleep_ms(rand_range(self._human_cfg.recognition_delay))
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
             self._spatial_point_reasoner.cache_response(
@@ -540,5 +540,4 @@ class RoboticArm:
                 submit_btn = frame_challenge.ele("css:div[class='button-submit button']")
                 self.click_element(submit_btn)
 
-        self._record_outcome(True)
         return True
