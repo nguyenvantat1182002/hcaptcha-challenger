@@ -48,13 +48,22 @@ class OpenRouterProvider:
         """Lazy-initialize the OpenAI client pointed to OpenRouter."""
         if self._client is None:
             import httpx
-            # Set a long default timeout for the client level to avoid conflicts with request-level timeouts
-            http_client = httpx.Client(verify=self._verify_ssl, timeout=120.0)
-            self._client = OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=self._api_key,
-                http_client=http_client,
-            )
+            # Use default SDK client if SSL verification is enabled (standard case)
+            # This is generally more stable with the SDK's internal timeout handling.
+            if self._verify_ssl:
+                self._client = OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=self._api_key,
+                    timeout=120.0,
+                )
+            else:
+                # Only use custom httpx client if we need to bypass SSL verification
+                http_client = httpx.Client(verify=False, timeout=120.0)
+                self._client = OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=self._api_key,
+                    http_client=http_client,
+                )
         return self._client
 
     @retry(
@@ -120,22 +129,30 @@ class OpenRouterProvider:
         json_schema = response_schema.model_json_schema()
 
         # Generate response (sync)
-        logger.debug(f"Sending request to OpenRouter (timeout={timeout}s)...")
-        response = self.client.chat.completions.create(
-            model=actual_model,
-            messages=messages,
-            response_format={
-                "type": "json_schema",
-                "json_schema": {
-                    "name": response_schema.__name__,
-                    "schema": json_schema,
-                    "strict": False
-                }
-            },
-            timeout=timeout,
-            **kwargs,
-        )
-        logger.debug("Received response from OpenRouter.")
+        import httpx
+        # Use an explicit Timeout object for better control over connect vs read timeouts
+        request_timeout = httpx.Timeout(timeout if timeout else 30.0, connect=10.0)
+        
+        logger.debug(f"Sending request to OpenRouter (model={actual_model}, timeout={request_timeout})...")
+        try:
+            response = self.client.chat.completions.create(
+                model=actual_model,
+                messages=messages,
+                response_format={
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": response_schema.__name__,
+                        "schema": json_schema,
+                        "strict": False
+                    }
+                },
+                timeout=request_timeout,
+                **kwargs,
+            )
+            logger.debug("Received response from OpenRouter.")
+        except Exception as e:
+            logger.error(f"OpenRouter request failed or timed out: {e}")
+            raise e
 
         resp_content = response.choices[0].message.content
         if not resp_content:
