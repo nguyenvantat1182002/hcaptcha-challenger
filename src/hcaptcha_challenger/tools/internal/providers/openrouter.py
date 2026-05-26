@@ -48,7 +48,8 @@ class OpenRouterProvider:
         """Lazy-initialize the OpenAI client pointed to OpenRouter."""
         if self._client is None:
             import httpx
-            http_client = httpx.Client(verify=self._verify_ssl)
+            # Set a long default timeout for the client level to avoid conflicts with request-level timeouts
+            http_client = httpx.Client(verify=self._verify_ssl, timeout=120.0)
             self._client = OpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=self._api_key,
@@ -119,6 +120,7 @@ class OpenRouterProvider:
         json_schema = response_schema.model_json_schema()
 
         # Generate response (sync)
+        logger.debug(f"Sending request to OpenRouter (timeout={timeout}s)...")
         response = self.client.chat.completions.create(
             model=actual_model,
             messages=messages,
@@ -133,6 +135,7 @@ class OpenRouterProvider:
             timeout=timeout,
             **kwargs,
         )
+        logger.debug("Received response from OpenRouter.")
 
         resp_content = response.choices[0].message.content
         if not resp_content:

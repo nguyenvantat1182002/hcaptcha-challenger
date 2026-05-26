@@ -185,7 +185,9 @@ class GeminiProvider:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(
-                json.dumps(self._response.model_dump(mode="json"), indent=2, ensure_ascii=False),
+                json.dumps(
+                    self._response.model_dump(mode="json"), indent=2, ensure_ascii=False
+                ),
                 encoding="utf-8",
             )
         except Exception as e:
