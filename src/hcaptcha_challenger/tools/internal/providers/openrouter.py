@@ -10,9 +10,9 @@ from pathlib import Path
 from typing import List, Type, TypeVar, Any
 
 from loguru import logger
-from openai import OpenAI, APITimeoutError
+from openai import OpenAI, APITimeoutError, APIConnectionError, RateLimitError
 from pydantic import BaseModel
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_not_exception_type
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_exception_type
 import httpx
 
 ResponseT = TypeVar("ResponseT", bound=BaseModel)
@@ -48,23 +48,23 @@ class OpenRouterProvider:
     def client(self) -> OpenAI:
         """Lazy-initialize the OpenAI client pointed to OpenRouter."""
         if self._client is None:
-            import httpx
             # Use default SDK client if SSL verification is enabled (standard case)
-            # This is generally more stable with the SDK's internal timeout handling.
             if self._verify_ssl:
                 self._client = OpenAI(
                     base_url="https://openrouter.ai/api/v1",
                     api_key=self._api_key,
-                    timeout=120.0,
+                    # We don't set a default timeout here to ensure per-request overrides work correctly
+                    timeout=None,
                     max_retries=0,
                 )
             else:
                 # Only use custom httpx client if we need to bypass SSL verification
-                http_client = httpx.Client(verify=False, timeout=120.0)
+                http_client = httpx.Client(verify=False)
                 self._client = OpenAI(
                     base_url="https://openrouter.ai/api/v1",
                     api_key=self._api_key,
                     http_client=http_client,
+                    timeout=None,
                     max_retries=0,
                 )
         return self._client
@@ -72,6 +72,8 @@ class OpenRouterProvider:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_fixed(3),
+        # Only retry on transient errors, not on validation or authentication errors
+        retry=retry_if_exception_type((APIConnectionError, RateLimitError)),
         before_sleep=lambda retry_state: logger.warning(
             f"Retry request ({retry_state.attempt_number}/3) - "
             f"Wait 3 seconds - Exception: {retry_state.outcome.exception()}"
@@ -104,7 +106,6 @@ class OpenRouterProvider:
         for img_path in images:
             if img_path and Path(img_path).exists():
                 base64_img = encode_image(img_path)
-                # Ensure we specify the correct mime type. Hardcoding jpeg works for most.
                 content.append(
                     {
                         "type": "image_url",
@@ -131,14 +132,16 @@ class OpenRouterProvider:
 
         json_schema = response_schema.model_json_schema()
 
-        # Generate response (sync)
-        import httpx
-        # Use an explicit Timeout object for better control over connect vs read timeouts
-        request_timeout = httpx.Timeout(timeout if timeout else 30.0, connect=10.0)
+        # Determine effective timeout
+        # Use httpx.Timeout for more granular control, especially helpful if one phase (e.g. write) 
+        # hangs due to large payloads (base64 images).
+        timeout_val = float(timeout) if timeout is not None else 30.0
+        request_timeout = httpx.Timeout(timeout_val, connect=10.0)
         
-        logger.debug(f"Sending request to OpenRouter (model={actual_model}, timeout={request_timeout})...")
+        logger.debug(f"Sending request to OpenRouter (model={actual_model}, timeout={timeout_val}s)...")
         try:
-            response = self.client.chat.completions.create(
+            # Using with_options to be absolutely sure about the timeout override
+            response = self.client.with_options(timeout=request_timeout).chat.completions.create(
                 model=actual_model,
                 messages=messages,
                 response_format={
@@ -149,12 +152,14 @@ class OpenRouterProvider:
                         "strict": False
                     }
                 },
-                timeout=request_timeout,
                 **kwargs,
             )
             logger.debug("Received response from OpenRouter.")
+        except APITimeoutError as e:
+            logger.error(f"OpenRouter request timed out after {timeout_val}s: {e}")
+            raise e
         except Exception as e:
-            logger.error(f"OpenRouter request failed or timed out: {e}")
+            logger.error(f"OpenRouter request failed: {e}")
             raise e
 
         resp_content = response.choices[0].message.content

@@ -290,7 +290,11 @@ class RoboticArm:
             cache_path = self.config.cache_dir.joinpath(f"challenge_view/_artifacts/{uuid4()}.png")
             self.screenshot_element_in_frame(challenge_view, cache_path)
 
-            router_result = self._challenge_router(challenge_screenshot=cache_path)
+            try:
+                router_result = self._challenge_router(challenge_screenshot=cache_path)
+            except Exception as e:
+                logger.error(f"Challenge routing failed: {e}")
+                return None
             
             self._challenge_prompt = router_result.challenge_prompt
 
