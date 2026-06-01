@@ -51,11 +51,15 @@ class SpatialReasoner(Reasoner[SCoTModelType, ResponseT], ABC):
         Returns:
             Parsed response matching the response_schema.
         """
+        base_prompt = "Analyze the image and solve the challenge based on the provided context. Output the precise coordinates as JSON."
+        if auxiliary_information:
+            base_prompt += f"\n\nContext:\n{auxiliary_information}"
+
         images: List[Path] = [challenge_screenshot, grid_divisions]
 
         return self._provider.generate_with_images(
             images=images,
-            user_prompt=auxiliary_information,
+            user_prompt=base_prompt,
             description=self.description,
             response_schema=response_schema,
             timeout=kwargs.pop("timeout", self._timeout),

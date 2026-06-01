@@ -109,6 +109,16 @@ class AgentConfig(BaseSettings):
 
     enable_challenger_debug: bool | None = Field(default=False, description="Enable debug mode")
 
+    # == Guidance Configuration == #
+    GUIDANCE_MODEL: str | None = Field(
+        default=None,
+        description="The multimodal model to use for providing hints to the main solver agent. e.g. 'google/gemini-3.1-pro-preview'"
+    )
+    GUIDANCE_CACHE_FILE: Path = Field(
+        default=Path("tmp/.cache/guidance_cache.json"),
+        description="Path to the JSON cache file storing guidance responses"
+    )
+
     # == Skills Configuration == #
     custom_skills_path: Path | None = Field(
         default=None, description="Path to custom skills rules.yaml"

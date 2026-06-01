@@ -43,7 +43,7 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
         super().__init__(openrouter_api_key, model, provider=provider, **kwargs)
 
     def __call__(
-        self, *, challenge_screenshot: Union[str, Path], **kwargs
+        self, *, challenge_screenshot: Union[str, Path], auxiliary_information: str | None = None, **kwargs
     ) -> ImageBinaryChallenge:
         """
         Analyze a 9-grid challenge and return the solution coordinates.
@@ -55,9 +55,13 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
         Returns:
             ImageBinaryChallenge containing the selected cell coordinates.
         """
+        base_prompt = "Solve the challenge, use [0,0] ~ [2,2] to locate 9grid, output the coordinates of the correct answer as JSON."
+        if auxiliary_information:
+            base_prompt += f"\n\nGuidance/Hint: {auxiliary_information}"
+
         return self._provider.generate_with_images(
             images=[Path(challenge_screenshot)],
-            user_prompt="Solve the challenge, use [0,0] ~ [2,2] to locate 9grid, output the coordinates of the correct answer as JSON.",
+            user_prompt=base_prompt,
             description=self.description,
             response_schema=ImageBinaryChallenge,
             timeout=kwargs.pop("timeout", self._timeout),

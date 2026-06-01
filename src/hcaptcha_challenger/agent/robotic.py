@@ -39,6 +39,8 @@ from hcaptcha_challenger.models import (
     SpatialPath,
     CaptchaPayload,
 )
+from hcaptcha_challenger.tools.guidance import GuidanceManager
+
 
 
 class DrissionPageMouse:
@@ -146,6 +148,16 @@ class RoboticArm:
             timeout=self.config.RESPONSE_TIMEOUT,
         )
         self._skill_manager = SkillManager(agent_config=config)
+        
+        self._guidance_manager = None
+        if self.config.GUIDANCE_MODEL:
+            self._guidance_manager = GuidanceManager(
+                openrouter_api_key=self.config.OPENROUTER_API_KEY.get_secret_value(),
+                model=self.config.GUIDANCE_MODEL,
+                cache_file=self.config.GUIDANCE_CACHE_FILE,
+                verify_ssl=self.config.VERIFY_SSL,
+            )
+
         self.signal_crumb_count: int | None = None
         self.captcha_payload: CaptchaPayload | None = None
         self._challenge_prompt: str | None = None
@@ -213,7 +225,7 @@ class RoboticArm:
     def get_challenge_frame_locator(self) -> ChromiumFrame:
         return self.page
         
-    def _match_user_prompt(self, job_type: ChallengeTypeEnum) -> str:
+    def _match_user_prompt(self, job_type: ChallengeTypeEnum, challenge_screenshot: Path | None = None) -> str:
         try:
             challenge_prompt = (
                 self.captcha_payload.get_requester_question()
@@ -221,6 +233,9 @@ class RoboticArm:
                 else self._challenge_prompt
             )
             if challenge_prompt and isinstance(challenge_prompt, str):
+                if self._guidance_manager and challenge_screenshot:
+                    guidance = self._guidance_manager.get_guidance(challenge_prompt, challenge_screenshot, job_type)
+                    return f"Question: {challenge_prompt}\nGuidance: {guidance}"
                 return self._skill_manager.get_skill(challenge_prompt, job_type)
         except Exception as e:
             logger.warning(f"Error while processing captcha payload: {e}")
@@ -406,9 +421,14 @@ class RoboticArm:
             challenge_screenshot = cache_key.joinpath(f"{cache_key.name}_{cid}_challenge_view.png")
             self.screenshot_element_in_frame(challenge_view, challenge_screenshot)
 
+            user_prompt = self._match_user_prompt(RequestType.IMAGE_LABEL_BINARY, challenge_screenshot)
+
             # Image classification
             try:
-                response = self._image_classifier(challenge_screenshot=challenge_screenshot)
+                response = self._image_classifier(
+                    challenge_screenshot=challenge_screenshot,
+                    auxiliary_information=user_prompt
+                )
             except Exception as e:
                 logger.error(f"Image classification failed: {e}")
                 return False
@@ -450,7 +470,7 @@ class RoboticArm:
 
             raw, projection, real_bbox = self._capture_spatial_mapping(frame_challenge, cache_key, cid)
 
-            user_prompt = self._match_user_prompt(job_type)
+            user_prompt = self._match_user_prompt(job_type, raw)
 
             kwargs = {}
             if job_type.value in self.config.MODEL_OVERRIDES:
@@ -499,7 +519,7 @@ class RoboticArm:
 
             raw, projection, real_bbox = self._capture_spatial_mapping(frame_challenge, cache_key, cid)
 
-            user_prompt = self._match_user_prompt(job_type)
+            user_prompt = self._match_user_prompt(job_type, raw)
 
             kwargs = {}
             if job_type.value in self.config.MODEL_OVERRIDES:
