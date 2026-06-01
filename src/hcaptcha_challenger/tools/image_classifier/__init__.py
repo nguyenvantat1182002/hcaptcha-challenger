@@ -57,7 +57,7 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
         """
         base_prompt = "Solve the challenge, use [0,0] ~ [2,2] to locate 9grid, output the coordinates of the correct answer as JSON."
         if auxiliary_information:
-            base_prompt += f"\n\nGuidance/Hint: {auxiliary_information}"
+            base_prompt += f"\n\nCRITICAL INSTRUCTION: You MUST strictly follow the Guidance/Hint below to identify the correct objects.\n\n{auxiliary_information}"
 
         return self._provider.generate_with_images(
             images=[Path(challenge_screenshot)],

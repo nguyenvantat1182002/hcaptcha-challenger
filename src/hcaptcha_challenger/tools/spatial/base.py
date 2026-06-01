@@ -53,7 +53,7 @@ class SpatialReasoner(Reasoner[SCoTModelType, ResponseT], ABC):
         """
         base_prompt = "Analyze the image and solve the challenge based on the provided context. Output the precise coordinates as JSON."
         if auxiliary_information:
-            base_prompt += f"\n\nContext:\n{auxiliary_information}"
+            base_prompt += f"\n\nCRITICAL INSTRUCTION: You MUST strictly follow the Guidance below to identify the correct objects.\n\n{auxiliary_information}"
 
         images: List[Path] = [challenge_screenshot, grid_divisions]
 
