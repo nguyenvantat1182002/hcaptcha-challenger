@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 from typing import Optional
+import threading
+from filelock import FileLock
 from loguru import logger
 from pydantic import BaseModel, Field
 
@@ -20,6 +22,8 @@ class GuidanceManager:
         self.api_key = openrouter_api_key
         self.model = model
         self.cache_file = cache_file
+        self.lock_file = cache_file.with_suffix(".lock")
+        self.memory_lock = threading.Lock()
         self.provider = OpenRouterProvider(api_key=openrouter_api_key, model=model, verify_ssl=verify_ssl)
         self.cache = self._load_cache()
 
@@ -34,14 +38,26 @@ class GuidanceManager:
     def _save_cache(self):
         try:
             self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-            self.cache_file.write_text(json.dumps(self.cache, ensure_ascii=False, indent=2), encoding="utf-8")
+            with FileLock(self.lock_file, timeout=10):
+                # Reload right before saving to prevent overwriting other processes' updates
+                current_cache = self._load_cache()
+                current_cache.update(self.cache)
+                self.cache_file.write_text(json.dumps(current_cache, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception as e:
             logger.warning(f"Failed to save guidance cache: {e}")
 
     def get_guidance(self, challenge_prompt: str, challenge_screenshot: Path, job_type: ChallengeTypeEnum) -> str:
-        if challenge_prompt in self.cache:
-            logger.debug(f"Guidance cache hit for prompt: {challenge_prompt}")
-            return self.cache[challenge_prompt]
+        with self.memory_lock:
+            if challenge_prompt in self.cache:
+                logger.debug(f"Guidance memory cache hit for prompt: {challenge_prompt}")
+                return self.cache[challenge_prompt]
+            
+            # Check file cache in case another process/thread updated it
+            file_cache = self._load_cache()
+            if challenge_prompt in file_cache:
+                self.cache.update(file_cache)
+                logger.debug(f"Guidance file cache hit for prompt: {challenge_prompt}")
+                return self.cache[challenge_prompt]
 
         logger.info(f"Generating new guidance for prompt: {challenge_prompt}")
         description = (
@@ -64,7 +80,8 @@ class GuidanceManager:
                 timeout=30.0
             )
             guidance_str = response.guidance
-            self.cache[challenge_prompt] = guidance_str
+            with self.memory_lock:
+                self.cache[challenge_prompt] = guidance_str
             self._save_cache()
             return guidance_str
         except Exception as e:
