@@ -378,6 +378,57 @@ class ImageAreaSelectChallenge(BaseModel):
     challenge_prompt: str
     points: List[PointCoordinate]
 
+    def deduplicate_points(self, threshold: float = 40.0) -> None:
+        """
+        Groups points using a connected-components (single-linkage) algorithm.
+        Two points are connected if their distance is <= threshold.
+        This handles cases where the model draws a continuous outline or dense cluster.
+        Each connected group is replaced by its centroid point.
+        """
+        import math
+        if not self.points:
+            return
+            
+        n = len(self.points)
+        adj = {i: [] for i in range(n)}
+        
+        # Build adjacency list based on distance threshold
+        for i in range(n):
+            for j in range(i + 1, n):
+                dist = math.hypot(self.points[i].x - self.points[j].x, self.points[i].y - self.points[j].y)
+                if dist <= threshold:
+                    adj[i].append(j)
+                    adj[j].append(i)
+                    
+        # Find connected components using BFS
+        visited = set()
+        clusters = []
+        
+        for i in range(n):
+            if i not in visited:
+                component = []
+                queue = [i]
+                visited.add(i)
+                
+                while queue:
+                    curr = queue.pop(0)
+                    component.append(self.points[curr])
+                    for neighbor in adj[curr]:
+                        if neighbor not in visited:
+                            visited.add(neighbor)
+                            queue.append(neighbor)
+                            
+                clusters.append(component)
+                
+        # Calculate centroid for each cluster
+        result = []
+        for cluster in clusters:
+            cx = int(round(sum(p.x for p in cluster) / len(cluster)))
+            cy = int(round(sum(p.y for p in cluster) / len(cluster)))
+            result.append(PointCoordinate(x=cx, y=cy))
+            
+        self.points = result
+
     @property
     def log_message(self) -> str:
         _coordinates = [{"x": i.x, "y": i.y} for i in self.points]

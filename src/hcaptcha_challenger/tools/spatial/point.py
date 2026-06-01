@@ -47,10 +47,12 @@ class SpatialPointReasoner(SpatialReasoner[ImageAreaSelectChallenge]):
         Returns:
             ImageAreaSelectChallenge containing the click coordinates.
         """
-        return self._invoke_spatial(
+        response = self._invoke_spatial(
             challenge_screenshot=Path(challenge_screenshot),
             grid_divisions=Path(grid_divisions),
             auxiliary_information=auxiliary_information,
             response_schema=ImageAreaSelectChallenge,
             **kwargs,
         )
+        response.deduplicate_points()
+        return response
