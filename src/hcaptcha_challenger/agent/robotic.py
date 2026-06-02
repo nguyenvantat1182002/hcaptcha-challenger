@@ -186,12 +186,12 @@ class RoboticArm:
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
 
         # Get iframe element's position on the top-level page (absolute page coordinates)
-        if hasattr(self.page, "frame_ele"):
-            frame_left, frame_top = self.page.frame_ele.rect.location
+        if hasattr(element.owner, "frame_ele"):
+            frame_left, frame_top = element.owner.frame_ele.rect.location
             # Account for iframe border width
             try:
-                bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
-                bl = float(self.page.frame_ele.style('border-left-width').replace('px', ''))
+                bt = float(element.owner.frame_ele.style('border-top-width').replace('px', ''))
+                bl = float(element.owner.frame_ele.style('border-left-width').replace('px', ''))
             except (ValueError, AttributeError):
                 bt, bl = 0, 0
         else:
@@ -304,7 +304,8 @@ class RoboticArm:
             tms = self.config.WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS * 1.5 / 1000
             self.page.wait(tms)
 
-            challenge_view = self.page.ele("css:div[class='challenge-view']")
+            frame_challenge = self.get_challenge_frame_locator()
+            challenge_view = frame_challenge.ele("css:body")
 
             cache_path = self.config.cache_dir.joinpath(f"challenge_view/_artifacts/{uuid4()}.png")
             self.screenshot_element_in_frame(challenge_view, cache_path)
@@ -340,11 +341,10 @@ class RoboticArm:
         return True
 
     def get_bounding_box(self, ele: ChromiumElement) -> dict:
-        left, top = ele.rect.location
-        width, height = ele.rect.size
-        bbox = {"x": left, "y": top, "width": width, "height": height}
-
-        return bbox
+        # Use getBoundingClientRect to get iframe-viewport coordinates.
+        # This matches what DrissionPageMouse expects for accurate CDP click events.
+        rect = ele._run_js('return this.getBoundingClientRect().toJSON();')
+        return {"x": rect['x'], "y": rect['y'], "width": rect['width'], "height": rect['height']}
 
 
 
@@ -358,8 +358,8 @@ class RoboticArm:
     def _capture_spatial_mapping(
         self, frame_challenge: ChromiumFrame, cache_key: Path, crumb_id: int | str
     ):
-        # Capture challenge-view
-        challenge_view = frame_challenge.ele("css:div[class='challenge-view']")
+        # Capture the entire body to ensure no overflowing elements (like draggable items) are cropped
+        challenge_view = frame_challenge.ele("css:body")
 
         challenge_screenshot = cache_key.joinpath(f"{cache_key.name}_{crumb_id}_challenge_view.png")
         self.screenshot_element_in_frame(challenge_view, challenge_screenshot)
@@ -419,8 +419,8 @@ class RoboticArm:
         for cid in range(crumb_count):
             self._wait_for_all_loaders_complete()
 
-            # Get challenge-view
-            challenge_view = frame_challenge.ele("css:div[class='challenge-view']")
+            # Get the entire body to prevent cropping
+            challenge_view = frame_challenge.ele("css:body")
 
             challenge_screenshot = cache_key.joinpath(f"{cache_key.name}_{cid}_challenge_view.png")
             self.screenshot_element_in_frame(challenge_view, challenge_screenshot)
