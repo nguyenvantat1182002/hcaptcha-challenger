@@ -187,7 +187,7 @@ class RoboticArm:
 
         # Get iframe element's position on the top-level page viewport
         if hasattr(self.page, "frame_ele"):
-            frame_left, frame_top = self.page.frame_ele.rect.location
+            frame_left, frame_top = self.page.frame_ele.rect.viewport_location
             # Account for iframe border width
             try:
                 bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
@@ -212,7 +212,7 @@ class RoboticArm:
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         save_path.write_bytes(img_bytes)
-
+        
         return save_path
         
     @property
