@@ -170,8 +170,21 @@ class RoboticArm:
     def pw_browser(self):
         if not hasattr(self, "_pw_browser"):
             from playwright.sync_api import sync_playwright
-            self._pw_context_manager = sync_playwright()
-            self._pw = self._pw_context_manager.start()
+            import asyncio
+            
+            # Temporary workaround to bypass Playwright's check for an active asyncio loop
+            original_get_running_loop = getattr(asyncio, "get_running_loop", None)
+            if original_get_running_loop:
+                def fake_get_running_loop():
+                    raise RuntimeError("No running event loop")
+                asyncio.get_running_loop = fake_get_running_loop
+            
+            try:
+                self._pw_context_manager = sync_playwright()
+                self._pw = self._pw_context_manager.start()
+            finally:
+                if original_get_running_loop:
+                    asyncio.get_running_loop = original_get_running_loop
             
             cdp_address = getattr(self.page.browser, 'address', None)
             if not cdp_address and hasattr(self.page, 'page'):
@@ -183,7 +196,7 @@ class RoboticArm:
             cdp_url = f"http://{cdp_address}"
             self._pw_browser = self._pw.chromium.connect_over_cdp(cdp_url)
         return self._pw_browser
-
+        
     def screenshot_element_in_frame(self, element: ChromiumElement, save_path: Path) -> Path:
         """Capture a screenshot of an element inside an iframe using Playwright.
         
