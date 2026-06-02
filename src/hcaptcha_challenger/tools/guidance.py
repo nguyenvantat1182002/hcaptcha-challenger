@@ -18,10 +18,11 @@ class GuidanceManager:
     Results are cached in a JSON file to minimize redundant API calls.
     """
 
-    def __init__(self, openrouter_api_key: str, model: str, cache_file: Path, verify_ssl: bool = True):
+    def __init__(self, openrouter_api_key: str, model: str, cache_file: Path, verify_ssl: bool = True, timeout: float = 120.0):
         self.api_key = openrouter_api_key
         self.model = model
         self.cache_file = cache_file
+        self.timeout = timeout
         self.lock_file = cache_file.with_suffix(".lock")
         self.memory_lock = threading.Lock()
         self.provider = OpenRouterProvider(api_key=openrouter_api_key, model=model, verify_ssl=verify_ssl)
@@ -77,7 +78,7 @@ class GuidanceManager:
                 response_schema=GuidanceResponse,
                 user_prompt=user_prompt,
                 description=description,
-                timeout=30.0
+                timeout=self.timeout
             )
             guidance_str = response.guidance
             with self.memory_lock:

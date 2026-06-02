@@ -69,7 +69,7 @@ class AgentConfig(BaseSettings):
         description="When your local network is poor, increase this value appropriately [unit: second]",
     )
     RESPONSE_TIMEOUT: float = Field(
-        default=30,
+        default=120,
         description="When your local network is poor, increase this value appropriately [unit: second]",
     )
     VERIFY_SSL: bool = Field(

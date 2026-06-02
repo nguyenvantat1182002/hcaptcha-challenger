@@ -156,6 +156,7 @@ class RoboticArm:
                 model=self.config.GUIDANCE_MODEL,
                 cache_file=self.config.GUIDANCE_CACHE_FILE,
                 verify_ssl=self.config.VERIFY_SSL,
+                timeout=self.config.RESPONSE_TIMEOUT,
             )
 
         self.signal_crumb_count: int | None = None
