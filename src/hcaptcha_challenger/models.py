@@ -334,6 +334,7 @@ class BoundingBoxCoordinate(BaseModel):
 
 
 class ImageBinaryChallenge(BaseModel):
+    thinking: str = Field(default="", description="Analyze the image, apply the guidance, and describe your reasoning step-by-step before determining the coordinates.")
     challenge_prompt: str
     coordinates: List[BoundingBoxCoordinate]
 
@@ -365,7 +366,7 @@ class ImageBinaryChallenge(BaseModel):
     @property
     def log_message(self) -> str:
         _coordinates = [i.box_2d for i in self.coordinates]
-        bundle = {"Challenge Prompt": self.challenge_prompt, "Coordinates": str(_coordinates)}
+        bundle = {"Thinking": self.thinking, "Challenge Prompt": self.challenge_prompt, "Coordinates": str(_coordinates)}
         return json.dumps(bundle, indent=2, ensure_ascii=False)
 
 
@@ -375,6 +376,7 @@ class PointCoordinate(BaseModel):
 
 
 class ImageAreaSelectChallenge(BaseModel):
+    thinking: str = Field(default="", description="Analyze the image, apply the guidance, and describe your reasoning step-by-step before determining the coordinates.")
     challenge_prompt: str
     points: List[PointCoordinate]
 
@@ -432,7 +434,7 @@ class ImageAreaSelectChallenge(BaseModel):
     @property
     def log_message(self) -> str:
         _coordinates = [{"x": i.x, "y": i.y} for i in self.points]
-        bundle = {"Challenge Prompt": self.challenge_prompt, "Coordinates": str(_coordinates)}
+        bundle = {"Thinking": self.thinking, "Challenge Prompt": self.challenge_prompt, "Coordinates": str(_coordinates)}
         return json.dumps(bundle, indent=2, ensure_ascii=False)
 
 
@@ -442,6 +444,7 @@ class SpatialPath(BaseModel):
 
 
 class ImageDragDropChallenge(BaseModel):
+    thinking: str = Field(default="", description="Analyze the image, apply the guidance, and describe your reasoning step-by-step before determining the coordinates.")
     challenge_prompt: str
     paths: List[SpatialPath]
 
@@ -454,7 +457,7 @@ class ImageDragDropChallenge(BaseModel):
             }
             for i in self.paths
         ]
-        bundle = {"Challenge Prompt": self.challenge_prompt, "Coordinates": str(_coordinates)}
+        bundle = {"Thinking": self.thinking, "Challenge Prompt": self.challenge_prompt, "Coordinates": str(_coordinates)}
         return json.dumps(bundle, indent=2, ensure_ascii=False)
 
     def get_approximate_paths(self, bbox) -> List[SpatialPath]:
