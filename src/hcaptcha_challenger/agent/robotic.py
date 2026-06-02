@@ -179,15 +179,15 @@ class RoboticArm:
         3. Adds iframe border offsets for accurate absolute coordinates
         4. Captures from top-level tab with clip at the computed absolute position
         """
-        # Scroll element into view within the iframe
-        element._run_js('this.scrollIntoView({block: "center"});')
+        # Scroll element into view within the iframe (like Playwright)
+        element._run_js('this.scrollIntoView({block: "center", inline: "center"});')
 
         # Get element's bounding rect relative to iframe viewport
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
 
-        # Get iframe element's position on the top-level page viewport
+        # Get iframe element's position on the top-level page (absolute page coordinates)
         if hasattr(self.page, "frame_ele"):
-            frame_left, frame_top = self.page.frame_ele.rect.viewport_location
+            frame_left, frame_top = self.page.frame_ele.rect.location
             # Account for iframe border width
             try:
                 bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
@@ -202,10 +202,13 @@ class RoboticArm:
         clip_x = frame_left + bl + rect['x']
         clip_y = frame_top + bt + rect['y']
 
-        # Capture from top-level tab (Page.captureScreenshot requires top-level target)
+        # Capture from top-level tab using absolute page coordinates
+        # captureBeyondViewport=True ensures the full element is captured even if partially outside the viewport,
+        # which is the exact same robust technique Playwright uses for ElementHandle.screenshot().
         data = self.page.tab._run_cdp(
             'Page.captureScreenshot',
             format='png',
+            captureBeyondViewport=True,
             clip={'x': clip_x, 'y': clip_y, 'width': rect['width'], 'height': rect['height'], 'scale': 1}
         )
         img_bytes = base64.b64decode(data['data'])
