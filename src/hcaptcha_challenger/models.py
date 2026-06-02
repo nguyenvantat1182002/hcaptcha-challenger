@@ -334,7 +334,7 @@ class BoundingBoxCoordinate(BaseModel):
 
 
 class ImageBinaryChallenge(BaseModel):
-    thinking: str = Field(default="", description="Analyze the image, apply the guidance, and describe your reasoning step-by-step before determining the coordinates.")
+    thinking: str = Field(default="", description="Concisely identify the target based on guidance (max 1 sentence) before returning coordinates.")
     challenge_prompt: str
     coordinates: List[BoundingBoxCoordinate]
 
@@ -376,7 +376,7 @@ class PointCoordinate(BaseModel):
 
 
 class ImageAreaSelectChallenge(BaseModel):
-    thinking: str = Field(default="", description="Analyze the image, apply the guidance, and describe your reasoning step-by-step before determining the coordinates.")
+    thinking: str = Field(default="", description="Concisely identify the target based on guidance (max 1 sentence) before returning coordinates.")
     challenge_prompt: str
     points: List[PointCoordinate]
 
@@ -444,7 +444,7 @@ class SpatialPath(BaseModel):
 
 
 class ImageDragDropChallenge(BaseModel):
-    thinking: str = Field(default="", description="Analyze the image, apply the guidance, and describe your reasoning step-by-step before determining the coordinates.")
+    thinking: str = Field(default="", description="Concisely identify the target based on guidance (max 1 sentence) before returning coordinates.")
     challenge_prompt: str
     paths: List[SpatialPath]
 
