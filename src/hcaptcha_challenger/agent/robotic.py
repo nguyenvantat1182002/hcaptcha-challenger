@@ -167,17 +167,12 @@ class RoboticArm:
         self._challenge_selector = "//iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=challenge')]"
 
     def screenshot_element_in_frame(self, element: ChromiumElement, save_path: Path) -> Path:
-        """Capture a screenshot of an element inside an iframe using CDP directly.
-
-        DrissionPage's built-in element.get_screenshot() has a coordinate mapping
-        bug for elements inside iframes. CDP's Page.captureScreenshot only works
-        on top-level targets.
-
+        """
+        Takes a screenshot of an element inside an iframe using Chrome DevTools Protocol.
         This method:
         1. Gets element rect via JS getBoundingClientRect() (iframe-relative)
-        2. Gets iframe position on page via frame_ele.rect.viewport_location
-        3. Adds iframe border offsets for accurate absolute coordinates
-        4. Captures from top-level tab with clip at the computed absolute position
+        2. Tries to capture from the iframe's CDP context directly (bypasses OOPIF black screen issues)
+        3. Falls back to capturing from the top-level tab if iframe capture fails
         """
         # Scroll element into view within the iframe
         element._run_js('this.scrollIntoView({block: "center"});')
@@ -185,30 +180,48 @@ class RoboticArm:
         # Get element's bounding rect relative to iframe viewport
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
 
-        # Get iframe element's position on the top-level page viewport
-        if hasattr(self.page, "frame_ele"):
-            frame_left, frame_top = self.page.frame_ele.rect.viewport_location
-            # Account for iframe border width
-            try:
-                bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
-                bl = float(self.page.frame_ele.style('border-left-width').replace('px', ''))
-            except (ValueError, AttributeError):
+        try:
+            # First attempt: capture directly from the frame's CDP session.
+            # This bypasses OOPIF black-screen issues because we capture from the frame's context.
+            # Note: ChromiumFrame uses run_cdp() instead of _run_cdp() in DrissionPage
+            data = self.page.run_cdp(
+                'Page.captureScreenshot',
+                format='png',
+                clip={'x': rect['x'], 'y': rect['y'], 'width': rect['width'], 'height': rect['height'], 'scale': 1}
+            )
+            img_bytes = base64.b64decode(data['data'])
+            
+            # Simple check to see if the image is mostly black/empty (less than 200 bytes for a PNG usually means empty)
+            if len(img_bytes) < 200:
+                raise ValueError("Image appears to be empty/black")
+                
+        except Exception as e:
+            logger.debug(f"Frame CDP capture failed, falling back to tab capture: {e}")
+            # Get iframe element's position on the top-level page viewport
+            if hasattr(self.page, "frame_ele"):
+                frame_left, frame_top = self.page.frame_ele.rect.viewport_location
+                # Account for iframe border width
+                try:
+                    bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
+                    bl = float(self.page.frame_ele.style('border-left-width').replace('px', ''))
+                except (ValueError, AttributeError):
+                    bt, bl = 0, 0
+            else:
+                frame_left, frame_top = 0, 0
                 bt, bl = 0, 0
-        else:
-            frame_left, frame_top = 0, 0
-            bt, bl = 0, 0
 
-        # Compute absolute position on the page
-        clip_x = frame_left + bl + rect['x']
-        clip_y = frame_top + bt + rect['y']
+            # Compute absolute position on the page
+            clip_x = frame_left + bl + rect['x']
+            clip_y = frame_top + bt + rect['y']
 
-        # Capture from top-level tab (Page.captureScreenshot requires top-level target)
-        data = self.page.tab._run_cdp(
-            'Page.captureScreenshot',
-            format='png',
-            clip={'x': clip_x, 'y': clip_y, 'width': rect['width'], 'height': rect['height'], 'scale': 1}
-        )
-        img_bytes = base64.b64decode(data['data'])
+            # Capture from top-level tab (Page.captureScreenshot requires top-level target)
+            data = self.page.tab._run_cdp(
+                'Page.captureScreenshot',
+                format='png',
+                captureBeyondViewport=True,
+                clip={'x': clip_x, 'y': clip_y, 'width': rect['width'], 'height': rect['height'], 'scale': 1}
+            )
+            img_bytes = base64.b64decode(data['data'])
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         save_path.write_bytes(img_bytes)
