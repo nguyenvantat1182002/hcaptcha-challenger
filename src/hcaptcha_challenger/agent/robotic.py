@@ -166,53 +166,50 @@ class RoboticArm:
         self._checkbox_selector = "//iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=checkbox')]"
         self._challenge_selector = "//iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=challenge')]"
 
+    @property
+    def pw_browser(self):
+        if not hasattr(self, "_pw_browser"):
+            from playwright.sync_api import sync_playwright
+            self._pw_context_manager = sync_playwright()
+            self._pw = self._pw_context_manager.start()
+            
+            cdp_address = getattr(self.page.browser, 'address', None)
+            if not cdp_address and hasattr(self.page, 'page'):
+                cdp_address = self.page.page.address
+                
+            if not cdp_address:
+                raise RuntimeError("Could not determine CDP address from DrissionPage instance")
+                
+            cdp_url = f"http://{cdp_address}"
+            self._pw_browser = self._pw.chromium.connect_over_cdp(cdp_url)
+        return self._pw_browser
+
     def screenshot_element_in_frame(self, element: ChromiumElement, save_path: Path) -> Path:
-        """Capture a screenshot of an element inside an iframe using CDP directly.
-
-        DrissionPage's built-in element.get_screenshot() has a coordinate mapping
-        bug for elements inside iframes. CDP's Page.captureScreenshot only works
-        on top-level targets.
-
-        This method:
-        1. Gets element rect via JS getBoundingClientRect() (iframe-relative)
-        2. Gets iframe position on page via frame_ele.rect.viewport_location
-        3. Adds iframe border offsets for accurate absolute coordinates
-        4. Captures from top-level tab with clip at the computed absolute position
-        """
-        # Scroll element into view within the iframe
-        element._run_js('this.scrollIntoView({block: "center"});')
-
-        # Get element's bounding rect relative to iframe viewport
-        rect = element._run_js('return this.getBoundingClientRect().toJSON();')
-
-        # Get iframe element's position on the top-level page viewport
-        if hasattr(self.page, "frame_ele"):
-            frame_left, frame_top = self.page.frame_ele.rect.viewport_location
-            # Account for iframe border width
-            try:
-                bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
-                bl = float(self.page.frame_ele.style('border-left-width').replace('px', ''))
-            except (ValueError, AttributeError):
-                bt, bl = 0, 0
-        else:
-            frame_left, frame_top = 0, 0
-            bt, bl = 0, 0
-
-        # Compute absolute position on the page
-        clip_x = frame_left + bl + rect['x']
-        clip_y = frame_top + bt + rect['y']
-
-        # Capture from top-level tab (Page.captureScreenshot requires top-level target)
-        data = self.page.tab._run_cdp(
-            'Page.captureScreenshot',
-            format='png',
-            clip={'x': clip_x, 'y': clip_y, 'width': rect['width'], 'height': rect['height'], 'scale': 1}
-        )
-        img_bytes = base64.b64decode(data['data'])
-
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        save_path.write_bytes(img_bytes)
+        """Capture a screenshot of an element inside an iframe using Playwright.
         
+        This replaces the old CDP-based method to fix coordinate mapping bugs.
+        """
+        browser = self.pw_browser
+        context = browser.contexts[0]
+        pw_page = context.pages[0]
+        
+        # Locate the iframe in Playwright
+        if hasattr(self.page, "frame_ele") and self.page.frame_ele:
+            frame_xpath = self.page.frame_ele.xpath
+            pw_frame = pw_page.locator(f"xpath={frame_xpath}").content_frame
+        else:
+            pw_frame = pw_page.main_frame
+            
+        if not pw_frame:
+            logger.warning("Could not resolve Playwright frame from DrissionPage iframe, using main frame")
+            pw_frame = pw_page.main_frame
+
+        # Locate the element inside the frame and take screenshot
+        pw_element = pw_frame.locator(f"xpath={element.xpath}")
+        
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        pw_element.screenshot(path=str(save_path))
+            
         return save_path
         
     @property
