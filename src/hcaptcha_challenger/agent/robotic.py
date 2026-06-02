@@ -180,22 +180,22 @@ class RoboticArm:
         4. Captures from top-level tab with clip at the computed absolute position
         """
         # Scroll element into view within the iframe
-        element._run_js('this.scrollIntoView({block: "center", inline: "center"});')
+        element._run_js('this.scrollIntoView({block: "center"});')
 
         # Get element's bounding rect relative to iframe viewport
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
 
         # Get iframe element's position on the top-level page viewport
         if hasattr(self.page, "frame_ele"):
-            frame_left, frame_top = element.owner.frame_ele.rect.location
+            frame_left, frame_top = self.page.frame_ele.rect.location
             # Account for iframe border width
             try:
-                bt = float(element.owner.frame_ele.style('border-top-width').replace('px', ''))
-                bl = float(element.owner.frame_ele.style('border-left-width').replace('px', ''))
+                bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
+                bl = float(self.page.frame_ele.style('border-left-width').replace('px', ''))
             except (ValueError, AttributeError):
                 bt, bl = 0, 0
         else:
-            frame_left, frame_top = 0, 0 
+            frame_left, frame_top = 0, 0
             bt, bl = 0, 0
 
         # Compute absolute position on the page
@@ -212,9 +212,9 @@ class RoboticArm:
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         save_path.write_bytes(img_bytes)
+
         return save_path
-
-
+        
     @property
     def checkbox_selector(self) -> str:
         return self._checkbox_selector
