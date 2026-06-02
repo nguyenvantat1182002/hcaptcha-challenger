@@ -10,15 +10,16 @@ page = ChromiumPage(addr_or_opts=opts)
 page.get('https://account.riotgames.com/')
 
 
-time.sleep(10)
+def start(page: ChromiumPage):
+    frames = page.get_frames("css://iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=challenge')]")
+    frame = frames[-1]
 
-frame = page.get_frame("css://iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=challenge')]")
+    config = AgentConfig(MOUSE_SPEED=0.5)
 
-config = AgentConfig(MOUSE_SPEED=0.5)
+    agent = AgentV(frame, config)
+    agent.wait_for_challenge()
 
-agent = AgentV(frame, config)
-agent.wait_for_challenge()
+    input('Continue')
 
-input('Continue')
-
-page.quit(del_data=True)
+    page.quit(del_data=True)
+    

@@ -179,20 +179,34 @@ class RoboticArm:
         3. Adds iframe border offsets for accurate absolute coordinates
         4. Captures from top-level tab with clip at the computed absolute position
         """
+        import time
+        # Get the frame owning the element
+        owner = getattr(element, 'owner', None)
+        
+        # If it's in a frame, we must scroll the frame into view first
+        if owner and hasattr(owner, 'frame_ele'):
+            try:
+                owner.frame_ele.scroll.to_see()
+            except Exception:
+                pass
+
         # Scroll element into view within the iframe
         element._run_js('this.scrollIntoView({block: "center"});')
+        
+        # Wait a tiny bit to ensure rendering after scroll
+        time.sleep(0.1)
 
         # Get element's bounding rect relative to iframe viewport
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
 
         # Get iframe element's position on the top-level page viewport
-        if hasattr(self.page, "frame_ele"):
-            frame_left, frame_top = self.page.frame_ele.rect.viewport_location
+        if owner and hasattr(owner, "frame_ele"):
+            frame_left, frame_top = owner.frame_ele.rect.viewport_location
             # Account for iframe border width
             try:
-                bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
-                bl = float(self.page.frame_ele.style('border-left-width').replace('px', ''))
-            except (ValueError, AttributeError):
+                bt = float(owner.frame_ele.style('border-top-width').replace('px', ''))
+                bl = float(owner.frame_ele.style('border-left-width').replace('px', ''))
+            except (ValueError, AttributeError, TypeError):
                 bt, bl = 0, 0
         else:
             frame_left, frame_top = 0, 0
@@ -203,7 +217,8 @@ class RoboticArm:
         clip_y = frame_top + bt + rect['y']
 
         # Capture from top-level tab (Page.captureScreenshot requires top-level target)
-        data = self.page.tab._run_cdp(
+        tab = self.page.tab if hasattr(self.page, 'tab') else self.page
+        data = tab._run_cdp(
             'Page.captureScreenshot',
             format='png',
             clip={'x': clip_x, 'y': clip_y, 'width': rect['width'], 'height': rect['height'], 'scale': 1}
