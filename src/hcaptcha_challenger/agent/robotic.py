@@ -190,12 +190,12 @@ class RoboticArm:
             frame_left, frame_top = element.owner.frame_ele.rect.viewport_location
             # Account for iframe border width
             try:
-                bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
-                bl = float(self.page.frame_ele.style('border-left-width').replace('px', ''))
+                bt = float(element.owner.frame_ele.style('border-top-width').replace('px', ''))
+                bl = float(element.owner.frame_ele.style('border-left-width').replace('px', ''))
             except (ValueError, AttributeError):
                 bt, bl = 0, 0
         else:
-            frame_left, frame_top = 0, 0
+            frame_left, frame_top = 0, 0 
             bt, bl = 0, 0
 
         # Compute absolute position on the page
