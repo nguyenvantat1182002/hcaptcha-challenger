@@ -179,19 +179,19 @@ class RoboticArm:
         3. Adds iframe border offsets for accurate absolute coordinates
         4. Captures from top-level tab with clip at the computed absolute position
         """
-        # Scroll element into view within the iframe (like Playwright)
+        # Scroll element into view within the iframe
         element._run_js('this.scrollIntoView({block: "center", inline: "center"});')
 
         # Get element's bounding rect relative to iframe viewport
         rect = element._run_js('return this.getBoundingClientRect().toJSON();')
 
-        # Get iframe element's position on the top-level page (absolute page coordinates)
-        if hasattr(element.owner, "frame_ele"):
+        # Get iframe element's position on the top-level page viewport
+        if hasattr(self.page, "frame_ele"):
             frame_left, frame_top = element.owner.frame_ele.rect.location
             # Account for iframe border width
             try:
-                bt = float(element.owner.frame_ele.style('border-top-width').replace('px', ''))
-                bl = float(element.owner.frame_ele.style('border-left-width').replace('px', ''))
+                bt = float(self.page.frame_ele.style('border-top-width').replace('px', ''))
+                bl = float(self.page.frame_ele.style('border-left-width').replace('px', ''))
             except (ValueError, AttributeError):
                 bt, bl = 0, 0
         else:
@@ -202,13 +202,10 @@ class RoboticArm:
         clip_x = frame_left + bl + rect['x']
         clip_y = frame_top + bt + rect['y']
 
-        # Capture from top-level tab using absolute page coordinates
-        # captureBeyondViewport=True ensures the full element is captured even if partially outside the viewport,
-        # which is the exact same robust technique Playwright uses for ElementHandle.screenshot().
+        # Capture from top-level tab (Page.captureScreenshot requires top-level target)
         data = self.page.tab._run_cdp(
             'Page.captureScreenshot',
             format='png',
-            captureBeyondViewport=True,
             clip={'x': clip_x, 'y': clip_y, 'width': rect['width'], 'height': rect['height'], 'scale': 1}
         )
         img_bytes = base64.b64decode(data['data'])
@@ -304,8 +301,7 @@ class RoboticArm:
             tms = self.config.WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS * 1.5 / 1000
             self.page.wait(tms)
 
-            frame_challenge = self.get_challenge_frame_locator()
-            challenge_view = frame_challenge.ele("css:body")
+            challenge_view = self.page.ele("css:div[class='challenge-view']")
 
             cache_path = self.config.cache_dir.joinpath(f"challenge_view/_artifacts/{uuid4()}.png")
             self.screenshot_element_in_frame(challenge_view, cache_path)
@@ -341,10 +337,11 @@ class RoboticArm:
         return True
 
     def get_bounding_box(self, ele: ChromiumElement) -> dict:
-        # Use getBoundingClientRect to get iframe-viewport coordinates.
-        # This matches what DrissionPageMouse expects for accurate CDP click events.
-        rect = ele._run_js('return this.getBoundingClientRect().toJSON();')
-        return {"x": rect['x'], "y": rect['y'], "width": rect['width'], "height": rect['height']}
+        left, top = ele.rect.location
+        width, height = ele.rect.size
+        bbox = {"x": left, "y": top, "width": width, "height": height}
+
+        return bbox
 
 
 
@@ -358,8 +355,8 @@ class RoboticArm:
     def _capture_spatial_mapping(
         self, frame_challenge: ChromiumFrame, cache_key: Path, crumb_id: int | str
     ):
-        # Capture the entire body to ensure no overflowing elements (like draggable items) are cropped
-        challenge_view = frame_challenge.ele("css:body")
+        # Capture challenge-view
+        challenge_view = frame_challenge.ele("css:div[class='challenge-view']")
 
         challenge_screenshot = cache_key.joinpath(f"{cache_key.name}_{crumb_id}_challenge_view.png")
         self.screenshot_element_in_frame(challenge_view, challenge_screenshot)
@@ -419,8 +416,8 @@ class RoboticArm:
         for cid in range(crumb_count):
             self._wait_for_all_loaders_complete()
 
-            # Get the entire body to prevent cropping
-            challenge_view = frame_challenge.ele("css:body")
+            # Get challenge-view
+            challenge_view = frame_challenge.ele("css:div[class='challenge-view']")
 
             challenge_screenshot = cache_key.joinpath(f"{cache_key.name}_{cid}_challenge_view.png")
             self.screenshot_element_in_frame(challenge_view, challenge_screenshot)
