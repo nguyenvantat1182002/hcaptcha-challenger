@@ -1,11 +1,10 @@
-import base64
-import json
+import threading
+import re
+import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import re
 
-from datetime import datetime
+from playwright.sync_api import sync_playwright
 from typing import Tuple
 from pathlib import Path
 from uuid import uuid4
@@ -168,23 +167,12 @@ class RoboticArm:
 
     @property
     def pw_browser(self):
-        if not hasattr(self, "_pw_browser"):
-            from playwright.sync_api import sync_playwright
-            import asyncio
+        if not hasattr(self, "_thread_local"):
+            self._thread_local = threading.local()
             
-            # Temporary workaround to bypass Playwright's check for an active asyncio loop
-            original_get_running_loop = getattr(asyncio, "get_running_loop", None)
-            if original_get_running_loop:
-                def fake_get_running_loop():
-                    raise RuntimeError("No running event loop")
-                asyncio.get_running_loop = fake_get_running_loop
-            
-            try:
-                self._pw_context_manager = sync_playwright()
-                self._pw = self._pw_context_manager.start()
-            finally:
-                if original_get_running_loop:
-                    asyncio.get_running_loop = original_get_running_loop
+        if not hasattr(self._thread_local, "pw_browser"):
+            self._thread_local.pw_context_manager = sync_playwright()
+            self._thread_local.pw = self._thread_local.pw_context_manager.start()
             
             cdp_address = getattr(self.page.browser, 'address', None)
             if not cdp_address and hasattr(self.page, 'page'):
@@ -194,8 +182,9 @@ class RoboticArm:
                 raise RuntimeError("Could not determine CDP address from DrissionPage instance")
                 
             cdp_url = f"http://{cdp_address}"
-            self._pw_browser = self._pw.chromium.connect_over_cdp(cdp_url)
-        return self._pw_browser
+            self._thread_local.pw_browser = self._thread_local.pw.chromium.connect_over_cdp(cdp_url)
+            
+        return self._thread_local.pw_browser
         
     def screenshot_element_in_frame(self, element: ChromiumElement, save_path: Path) -> Path:
         """Capture a screenshot of an element inside an iframe using Playwright.
