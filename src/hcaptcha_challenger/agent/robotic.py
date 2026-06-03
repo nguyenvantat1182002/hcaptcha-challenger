@@ -164,16 +164,12 @@ class RoboticArm:
 
         self._checkbox_selector = "//iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=checkbox')]"
         self._challenge_selector = "//iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=challenge')]"
+        self._pw_worker = None
 
     @property
-    def pw_browser(self):
-        if not hasattr(self, "_thread_local"):
-            self._thread_local = threading.local()
-            
-        if not hasattr(self._thread_local, "pw_browser"):
-            self._thread_local.pw_context_manager = sync_playwright()
-            self._thread_local.pw = self._thread_local.pw_context_manager.start()
-            
+    def pw_worker(self):
+        """Lazy initialization of the reusable Playwright worker."""
+        if self._pw_worker is None:
             cdp_address = getattr(self.page.browser, 'address', None)
             if not cdp_address and hasattr(self.page, 'page'):
                 cdp_address = self.page.page.address
@@ -181,37 +177,38 @@ class RoboticArm:
             if not cdp_address:
                 raise RuntimeError("Could not determine CDP address from DrissionPage instance")
                 
-            cdp_url = f"http://{cdp_address}"
-            self._thread_local.pw_browser = self._thread_local.pw.chromium.connect_over_cdp(cdp_url)
-            
-        return self._thread_local.pw_browser
-        
+            from hcaptcha_challenger.agent.playwright_worker import PlaywrightWorker
+            self._pw_worker = PlaywrightWorker(cdp_address)
+        return self._pw_worker
+
     def screenshot_element_in_frame(self, element: ChromiumElement, save_path: Path) -> Path:
         """Capture a screenshot of an element inside an iframe using Playwright.
         
         This replaces the old CDP-based method to fix coordinate mapping bugs.
+        Runs in the isolated PlaywrightWorker thread to prevent asyncio loop conflicts.
         """
-        browser = self.pw_browser
-        context = browser.contexts[0]
-        pw_page = context.pages[0]
+        frame_xpath = self.page.frame_ele.xpath if hasattr(self.page, "frame_ele") and self.page.frame_ele else None
+        element_xpath = element.xpath
+        save_path_str = str(save_path)
         
-        # Locate the iframe in Playwright
-        if hasattr(self.page, "frame_ele") and self.page.frame_ele:
-            frame_xpath = self.page.frame_ele.xpath
-            pw_frame = pw_page.locator(f"xpath={frame_xpath}").content_frame
-        else:
-            pw_frame = pw_page.main_frame
+        def _take_screenshot(browser):
+            context = browser.contexts[0]
+            pw_page = context.pages[0]
             
-        if not pw_frame:
-            logger.warning("Could not resolve Playwright frame from DrissionPage iframe, using main frame")
-            pw_frame = pw_page.main_frame
+            if frame_xpath:
+                pw_frame = pw_page.locator(f"xpath={frame_xpath}").content_frame
+            else:
+                pw_frame = pw_page.main_frame
+                
+            if not pw_frame:
+                logger.warning("Could not resolve Playwright frame from DrissionPage iframe, using main frame")
+                pw_frame = pw_page.main_frame
 
-        # Locate the element inside the frame and take screenshot
-        pw_element = pw_frame.locator(f"xpath={element.xpath}")
-        
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        pw_element.screenshot(path=str(save_path))
-            
+            pw_element = pw_frame.locator(f"xpath={element_xpath}")
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            pw_element.screenshot(path=save_path_str)
+                    
+        self.pw_worker.execute(_take_screenshot)
         return save_path
         
     @property
