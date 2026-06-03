@@ -23,6 +23,9 @@ class PlaywrightWorker:
         success, result = self.result_queue.get()
         if not success:
             raise RuntimeError(f"Failed to initialize Playwright worker: {result}")
+            
+        import atexit
+        atexit.register(self.close)
 
     def _run_loop(self):
         try:
