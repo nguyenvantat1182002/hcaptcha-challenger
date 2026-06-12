@@ -234,13 +234,15 @@ class RoboticArm:
         checkbox_element = checkbox_frame.locator("//div[@id='checkbox']")
         await self.click_by_mouse(checkbox_element)
 
-    async def refresh_challenge(self):
+    async def refresh_challenge(self) -> bool:
         try:
             refresh_frame = await self.get_challenge_frame_locator()
             refresh_element = refresh_frame.locator("//div[@class='refresh button']")
             await self.click_by_mouse(refresh_element)
-        except TimeoutError as err:
+        except Exception as err:
             logger.warning(f"Failed to click refresh button - {err=}")
+            return False
+        return True
 
     async def check_crumb_count(self):
         """Page turn in tasks"""
@@ -280,6 +282,7 @@ class RoboticArm:
             router_result = await self._challenge_router(
                 challenge_screenshot=cache_path
             )
+            logger.debug(f"Router Model: provider={self.config.active_provider} model={self.config.CHALLENGE_CLASSIFIER_MODEL} prompt='{router_result.challenge_prompt}' type={router_result.challenge_type}")
             self._challenge_prompt = router_result.challenge_prompt
             return router_result.challenge_type
         return None
@@ -360,7 +363,7 @@ class RoboticArm:
         grid_divisions.parent.mkdir(parents=True, exist_ok=True)
         plt.imsave(str(grid_divisions.resolve()), result)
 
-        return challenge_screenshot, grid_divisions
+        return challenge_screenshot, grid_divisions, bbox
 
     async def _perform_drag_drop(
         self, path: SpatialPath, steps: int = 25, delay_ms: int = 15
@@ -485,7 +488,7 @@ class RoboticArm:
                 self.config.WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS
             )
 
-            raw, projection = await self._capture_spatial_mapping(
+            raw, projection, bbox = await self._capture_spatial_mapping(
                 frame_challenge, cache_key, cid
             )
 
@@ -503,7 +506,14 @@ class RoboticArm:
                 path=cache_key.joinpath(f"{cache_key.name}_{cid}_model_answer.json")
             )
 
+            scale_x = bbox['width'] / 1000
+            scale_y = bbox['height'] / 1000
+            
             for path in response.paths:
+                path.start_point.x = bbox['x'] + path.start_point.x * scale_x
+                path.start_point.y = bbox['y'] + path.start_point.y * scale_y
+                path.end_point.x = bbox['x'] + path.end_point.x * scale_x
+                path.end_point.y = bbox['y'] + path.end_point.y * scale_y
                 await self._perform_drag_drop(path)
 
             # {{< Verify >}}
@@ -523,7 +533,7 @@ class RoboticArm:
                 self.config.WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS
             )
 
-            raw, projection = await self._capture_spatial_mapping(
+            raw, projection, bbox = await self._capture_spatial_mapping(
                 frame_challenge, cache_key, cid
             )
 
@@ -541,8 +551,22 @@ class RoboticArm:
                 path=cache_key.joinpath(f"{cache_key.name}_{cid}_model_answer.json")
             )
 
-            for point in response.points:
-                await self.page.mouse.click(point.x, point.y, delay=180)
+            scale_x = bbox['width'] / 1000
+            scale_y = bbox['height'] / 1000
+            
+            # Deduplicate points to avoid multiple clicks
+            seen_points = set()
+            unique_points = []
+            for p in response.points:
+                point_tuple = (p.x, p.y)
+                if point_tuple not in seen_points:
+                    seen_points.add(point_tuple)
+                    unique_points.append(p)
+
+            for point in unique_points:
+                px = bbox['x'] + point.x * scale_x
+                py = bbox['y'] + point.y * scale_y
+                await self.page.mouse.click(px, py, delay=180)
                 await self.page.wait_for_timeout(500)
 
             # {{< Verify >}}

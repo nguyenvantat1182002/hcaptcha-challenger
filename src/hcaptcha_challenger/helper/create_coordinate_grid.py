@@ -57,7 +57,7 @@ def _create_adaptive_contrast_grid(
     ax.set_ylim(y + height, y)
 
     ax.spines['left'].set_position(('data', x))  # type: ignore[arg-type]
-    ax.spines['bottom'].set_position(('data', y + height))  # type: ignore[arg-type]
+    ax.spines['top'].set_position(('data', y))  # type: ignore[arg-type]
 
     for spine in ax.spines.values():
         spine.set_color(grid_color)
@@ -65,8 +65,11 @@ def _create_adaptive_contrast_grid(
     ax.tick_params(axis='x', colors=grid_color, labelsize=tick_labels_size)
     ax.tick_params(axis='y', colors=grid_color, labelsize=tick_labels_size)
 
-    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    
+    ax.xaxis.tick_top()
+    ax.xaxis.set_label_position('top')
 
     x_ticks = np.linspace(x, x + width, x_line_space_num)
     y_ticks = np.linspace(y, y + height, y_line_space_num)
@@ -74,8 +77,8 @@ def _create_adaptive_contrast_grid(
     ax.set_xticks(x_ticks)
     ax.set_yticks(y_ticks)
 
-    ax.set_xticklabels([str(round(tick)) for tick in x_ticks], color=grid_color)
-    ax.set_yticklabels([str(round(tick)) for tick in y_ticks], color=grid_color)
+    ax.set_xticklabels([str(round(1000 * (tick - x) / width)) for tick in x_ticks], color=grid_color)
+    ax.set_yticklabels([str(round(1000 * (tick - y) / height)) for tick in y_ticks], color=grid_color)
 
     ax.grid(True, color=grid_color, alpha=0.7, linestyle='-', linewidth=1.0)
 
@@ -181,11 +184,14 @@ def create_coordinate_grid(
 
     # Set origin in the top-left corner
     ax.spines['left'].set_position(('data', x))  # type: ignore[arg-type]
-    ax.spines['bottom'].set_position(('data', y + height))  # type: ignore[arg-type]
+    ax.spines['top'].set_position(('data', y))  # type: ignore[arg-type]
 
-    # Remove top and right spines
-    ax.spines['top'].set_visible(False)
+    # Remove bottom and right spines
+    ax.spines['bottom'].set_visible(False)
     ax.spines['right'].set_visible(False)
+    
+    ax.xaxis.tick_top()
+    ax.xaxis.set_label_position('top')
 
     # Create grid lines
     x_ticks = np.linspace(x, x + width, x_line_space_num)
@@ -196,9 +202,9 @@ def create_coordinate_grid(
     ax.set_yticks(y_ticks)
     ax.tick_params(axis='both', which='major', labelsize=tick_labels_size)
 
-    # Format tick labels as rounded integers
-    ax.set_xticklabels([str(round(tick)) for tick in x_ticks])
-    ax.set_yticklabels([str(round(tick)) for tick in y_ticks])
+    # Format tick labels as rounded integers (normalized to 0-1000)
+    ax.set_xticklabels([str(round(1000 * (tick - x) / width)) for tick in x_ticks])
+    ax.set_yticklabels([str(round(1000 * (tick - y) / height)) for tick in y_ticks])
 
     # Add grid with semi-transparent purple lines
     ax.grid(True, color=color, alpha=0.5, linestyle='-', linewidth=1.0)

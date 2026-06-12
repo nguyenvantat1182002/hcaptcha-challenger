@@ -58,13 +58,6 @@ class AgentV:
             try:
                 hsw_text = await response.text()
                 await self.page.evaluate(hsw_text)
-                await self.page.evaluate(
-                    """
-                    () => {
-                        return typeof hsw === 'function' ? true : 'hsw不是函数';
-                    }
-                    """
-                )
             except Exception as err:
                 logger.error(f"An error occurred while injecting hsw script: {err}")
         elif "/getcaptcha/" in response.url:
@@ -196,8 +189,17 @@ class AgentV:
 
     async def _solve_captcha(self):
         challenge_type = await self._review_challenge_type()
+        
+        model_name = "unknown"
+        if challenge_type == RequestType.IMAGE_LABEL_BINARY:
+            model_name = self.config.IMAGE_CLASSIFIER_MODEL
+        elif challenge_type in (ChallengeTypeEnum.IMAGE_LABEL_SINGLE_SELECT, ChallengeTypeEnum.IMAGE_LABEL_MULTI_SELECT):
+            model_name = self.config.SPATIAL_POINT_REASONER_MODEL
+        elif challenge_type in (ChallengeTypeEnum.IMAGE_DRAG_SINGLE, ChallengeTypeEnum.IMAGE_DRAG_MULTI):
+            model_name = self.config.SPATIAL_PATH_REASONER_MODEL
+
         logger.debug(
-            f"Start Challenge - type={challenge_type.value} count={self.robotic_arm.signal_crumb_count}"
+            f"Start Challenge - type={challenge_type.value} count={self.robotic_arm.signal_crumb_count} provider={self.config.active_provider} model={model_name}"
         )
 
         try:
@@ -207,7 +209,9 @@ class AgentV:
                     for q in self.config.ignore_request_questions:
                         if q in self._captcha_payload.get_requester_question():
                             await self.page.wait_for_timeout(2000)
-                            await self.robotic_arm.refresh_challenge()
+                            if not await self.robotic_arm.refresh_challenge():
+                                self._captcha_response_queue.put_nowait(CaptchaResponse(error="refresh_failed", is_pass=False))
+                                return
                             return await self._solve_captcha()
 
             # {{< challenge start >}}
@@ -265,14 +269,18 @@ class AgentV:
             # {{< challenge end >}}
 
             await self.page.wait_for_timeout(2000)
-            await self.robotic_arm.refresh_challenge()
+            if not await self.robotic_arm.refresh_challenge():
+                self._captcha_response_queue.put_nowait(CaptchaResponse(error="refresh_failed", is_pass=False))
+                return
             return await self._solve_captcha()
         except Exception as err:
             # This is an execution error inside the challenge,
             # hcaptcha challenge does not automatically refresh
             logger.exception(f"ChallengeException - type={challenge_type.value} {err=}")
             await self.page.wait_for_timeout(5000)
-            await self.robotic_arm.refresh_challenge()
+            if not await self.robotic_arm.refresh_challenge():
+                self._captcha_response_queue.put_nowait(CaptchaResponse(error="refresh_failed", is_pass=False))
+                return
             return await self._solve_captcha()
 
     async def wait_for_challenge(self) -> ChallengeSignal:

@@ -80,7 +80,7 @@ class AgentConfig(BaseSettings):
         description="LLM HTTP timeout in seconds (Set higher if OpenRouter queues) [unit: second]",
     )
     RETRY_ON_FAILURE: bool = Field(
-        default=True, description="Re-execute the challenge when it fails"
+        default=False, description="Re-execute the challenge when it fails"
     )
     WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS: int = Field(
         default=1500,
