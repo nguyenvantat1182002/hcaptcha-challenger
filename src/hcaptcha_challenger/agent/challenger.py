@@ -218,16 +218,32 @@ class AgentV:
         return False
         
     def wait_for_challenge(self) -> ChallengeSignal:
+        prompt = None
+        guidance_mgr = getattr(self.robotic_arm, "_guidance_manager", None)
+        
+        def _finalize(signal: ChallengeSignal) -> ChallengeSignal:
+            # Re-eval prompt because _solve_captcha may populate it
+            nonlocal prompt
+            if self.robotic_arm and self.robotic_arm.captcha_payload:
+                prompt = self.robotic_arm.captcha_payload.get_requester_question()
+                
+            if prompt and guidance_mgr:
+                if signal == ChallengeSignal.SUCCESS:
+                    guidance_mgr.record_success(prompt)
+                elif signal == ChallengeSignal.FAILURE:
+                    guidance_mgr.record_failure(prompt, max_failures=self.config.GUIDANCE_MAX_FAILURES)
+            return signal
+
         # Assigning human-computer challenge tasks to the main thread coroutine.
         # ----------------------------------------------------------------------
         if self._captcha_response_queue.empty():
             result = self._solve_captcha()
             if self._getcaptcha_error:
-                return ChallengeSignal.GET_CAPTCHA_FAILED
+                return _finalize(ChallengeSignal.GET_CAPTCHA_FAILED)
             if result is None:
-                return ChallengeSignal.SUCCESS
+                return _finalize(ChallengeSignal.SUCCESS)
             elif not result:
-                return ChallengeSignal.FAILURE
+                return _finalize(ChallengeSignal.FAILURE)
             
         # Waiting for hCAPTCHA response processing result
         # -----------------------------------------------
@@ -239,7 +255,7 @@ class AgentV:
 
         while not cr:
             if self._checkcaptcha_error:
-                return ChallengeSignal.CHECK_CAPTCHA_FAILED
+                return _finalize(ChallengeSignal.CHECK_CAPTCHA_FAILED)
                 
             if time.monotonic() > end_time:
                 break
@@ -251,12 +267,12 @@ class AgentV:
                 
         # Match: Timeout / Loss
         if not cr or (cr and not cr.is_pass):
-            return ChallengeSignal.FAILURE
+            return _finalize(ChallengeSignal.FAILURE)
             
         # Match: Success
         if cr.is_pass:
             logger.success("Challenge success")
             # self._cache_validated_captcha_response(cr)
-            return ChallengeSignal.SUCCESS
+            return _finalize(ChallengeSignal.SUCCESS)
         
-        return ChallengeSignal.FAILURE
+        return _finalize(ChallengeSignal.FAILURE)

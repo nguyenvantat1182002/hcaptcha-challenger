@@ -118,6 +118,10 @@ class AgentConfig(BaseSettings):
         default=Path("tmp/.cache/guidance_cache.json"),
         description="Path to the JSON cache file storing guidance responses"
     )
+    GUIDANCE_MAX_FAILURES: int = Field(
+        default=3,
+        description="The maximum number of consecutive failures before resetting guidance."
+    )
 
     # == Skills Configuration == #
     custom_skills_path: Path | None = Field(
