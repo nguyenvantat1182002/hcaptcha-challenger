@@ -51,6 +51,7 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
         *,
         provider: str = "gemini",
         provider_instance: ChatProvider | None = None,
+        timeout: float | None = None,
         **kwargs,
     ):
         """
@@ -61,11 +62,13 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
             model: Model name to use.
             provider: Type of the underlying provider ("gemini" or "openrouter").
             provider_instance: Optional custom provider (for extensibility).
+            timeout: Optional LLM HTTP timeout.
             **kwargs: Additional options for subclasses.
         """
         self._api_key = api_key
         self._model = model
         self._provider_type = provider
+        self._timeout = timeout
         self._provider: ChatProvider = (
             provider_instance or self._create_default_provider()
         )
@@ -76,10 +79,10 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
         if self._provider_type == "openrouter":
             from .providers.openrouter.provider import OpenRouterProvider
 
-            return OpenRouterProvider(api_key=self._api_key, model=self._model)
+            return OpenRouterProvider(api_key=self._api_key, model=self._model, timeout=self._timeout)
 
         # Default to Gemini
-        return GeminiProvider(api_key=self._api_key, model=self._model)
+        return GeminiProvider(api_key=self._api_key, model=self._model, timeout=self._timeout)
 
     @abstractmethod
     async def __call__(self, *args, **kwargs) -> ResponseT:

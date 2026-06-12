@@ -75,6 +75,10 @@ class AgentConfig(BaseSettings):
         default=30,
         description="When your local network is poor, increase this value appropriately [unit: second]",
     )
+    LLM_TIMEOUT: float = Field(
+        default=120.0,
+        description="LLM HTTP timeout in seconds (Set higher if OpenRouter queues) [unit: second]",
+    )
     RETRY_ON_FAILURE: bool = Field(
         default=True, description="Re-execute the challenge when it fails"
     )

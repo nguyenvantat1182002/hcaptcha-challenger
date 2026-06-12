@@ -44,6 +44,7 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
         *,
         provider: str = "gemini",
         provider_instance: ChatProvider | None = None,
+        timeout: float | None = None,
         **kwargs,
     ):
         super().__init__(
@@ -51,6 +52,7 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
             model=model,
             provider=provider,
             provider_instance=provider_instance,
+            timeout=timeout,
             **kwargs,
         )
 

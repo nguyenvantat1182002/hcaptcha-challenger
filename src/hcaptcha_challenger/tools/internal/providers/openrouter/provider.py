@@ -1,5 +1,6 @@
 import base64
 import json
+import httpx
 from pathlib import Path
 from typing import List, TypeVar
 
@@ -15,18 +16,21 @@ class OpenRouterProvider:
     Provides structured JSON outputs using response_format={"type": "json_object"}
     """
 
-    def __init__(self, api_key: str, model: str = "openai/gpt-4o-mini"):
+    def __init__(self, api_key: str, model: str = "openai/gpt-4o-mini", timeout: float | None = None):
         """
         Initialize the OpenRouter provider.
 
         Args:
             api_key: OpenRouter API key.
             model: Model identifier.
+            timeout: Optional LLM HTTP timeout.
         """
         self.api_key = api_key
         self.model = model
+        
+        timeout_config = httpx.Timeout(timeout) if timeout is not None else httpx.USE_CLIENT_DEFAULT
         self.client = AsyncOpenAI(
-            api_key=api_key, base_url="https://openrouter.ai/api/v1"
+            api_key=api_key, base_url="https://openrouter.ai/api/v1", timeout=timeout_config
         )
 
     def _encode_image(self, image_path: Path) -> str:

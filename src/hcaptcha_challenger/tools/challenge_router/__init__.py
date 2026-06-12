@@ -40,6 +40,7 @@ class ChallengeRouter(Reasoner[FastShotModelType, ChallengeRouterResult]):
         *,
         provider: str = "gemini",
         provider_instance: ChatProvider | None = None,
+        timeout: float | None = None,
         **kwargs,
     ):
         super().__init__(
@@ -47,6 +48,7 @@ class ChallengeRouter(Reasoner[FastShotModelType, ChallengeRouterResult]):
             model=model,
             provider=provider,
             provider_instance=provider_instance,
+            timeout=timeout,
             **kwargs,
         )
 

@@ -97,21 +97,25 @@ class RoboticArm:
             api_key=self.config.active_api_key,
             provider=self.config.active_provider,
             model=self.config.CHALLENGE_CLASSIFIER_MODEL,
+            timeout=self.config.LLM_TIMEOUT,
         )
         self._image_classifier = ImageClassifier(
             api_key=self.config.active_api_key,
             provider=self.config.active_provider,
             model=self.config.IMAGE_CLASSIFIER_MODEL,
+            timeout=self.config.LLM_TIMEOUT,
         )
         self._spatial_path_reasoner = SpatialPathReasoner(
             api_key=self.config.active_api_key,
             provider=self.config.active_provider,
             model=self.config.SPATIAL_PATH_REASONER_MODEL,
+            timeout=self.config.LLM_TIMEOUT,
         )
         self._spatial_point_reasoner = SpatialPointReasoner(
             api_key=self.config.active_api_key,
             provider=self.config.active_provider,
             model=self.config.SPATIAL_POINT_REASONER_MODEL,
+            timeout=self.config.LLM_TIMEOUT,
         )
         self._skill_manager = SkillManager(agent_config=config)
         self.signal_crumb_count: int | None = None
