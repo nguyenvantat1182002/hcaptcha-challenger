@@ -5,10 +5,15 @@ ImageClassifier - 9-grid image classification challenge solver.
 This tool analyzes 9-grid challenge screenshots and identifies which
 cells should be selected based on the challenge prompt.
 """
+
 from pathlib import Path
 from typing import Union
 
-from hcaptcha_challenger.models import SCoTModelType, ImageBinaryChallenge, DEFAULT_SCOT_MODEL
+from hcaptcha_challenger.models import (
+    SCoTModelType,
+    ImageBinaryChallenge,
+    DEFAULT_SCOT_MODEL,
+)
 from hcaptcha_challenger.tools.internal.base import Reasoner
 from hcaptcha_challenger.tools.internal.providers.protocol import ChatProvider
 from hcaptcha_challenger.utils import load_desc
@@ -34,13 +39,20 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
 
     def __init__(
         self,
-        gemini_api_key: str,
+        api_key: str,
         model: SCoTModelType = DEFAULT_SCOT_MODEL,
         *,
-        provider: ChatProvider | None = None,
+        provider: str = "gemini",
+        provider_instance: ChatProvider | None = None,
         **kwargs,
     ):
-        super().__init__(gemini_api_key, model, provider=provider, **kwargs)
+        super().__init__(
+            api_key=api_key,
+            model=model,
+            provider=provider,
+            provider_instance=provider_instance,
+            **kwargs,
+        )
 
     async def __call__(
         self, *, challenge_screenshot: Union[str, Path], **kwargs

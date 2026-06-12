@@ -6,6 +6,7 @@ This module provides tools to classify challenge screenshots into their
 respective types (single/multi select, single/multi drag) and extract
 the challenge prompt.
 """
+
 from pathlib import Path
 from typing import Union
 
@@ -34,13 +35,20 @@ class ChallengeRouter(Reasoner[FastShotModelType, ChallengeRouterResult]):
 
     def __init__(
         self,
-        gemini_api_key: str,
+        api_key: str,
         model: FastShotModelType = DEFAULT_FAST_SHOT_MODEL,
         *,
-        provider: ChatProvider | None = None,
+        provider: str = "gemini",
+        provider_instance: ChatProvider | None = None,
         **kwargs,
     ):
-        super().__init__(gemini_api_key, model, provider=provider, **kwargs)
+        super().__init__(
+            api_key=api_key,
+            model=model,
+            provider=provider,
+            provider_instance=provider_instance,
+            **kwargs,
+        )
 
     async def __call__(
         self, *, challenge_screenshot: Union[str, Path], **kwargs

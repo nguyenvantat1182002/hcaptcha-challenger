@@ -4,6 +4,7 @@ GeminiProvider - Google Gemini API implementation.
 
 This provider wraps the google-genai SDK to provide image-based content generation.
 """
+
 import asyncio
 import json
 from pathlib import Path
@@ -75,7 +76,9 @@ class GeminiProvider:
     @staticmethod
     def _files_to_parts(files: List[types.File]) -> List[types.Part]:
         """Convert uploaded files to parts."""
-        return [types.Part.from_uri(file_uri=f.uri, mime_type=f.mime_type) for f in files]
+        return [
+            types.Part.from_uri(file_uri=f.uri, mime_type=f.mime_type) for f in files
+        ]
 
     def _set_thinking_config(self, config: types.GenerateContentConfig) -> None:
         """Configure thinking settings based on model capabilities."""
@@ -169,7 +172,9 @@ class GeminiProvider:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(
-                json.dumps(self._response.model_dump(mode="json"), indent=2, ensure_ascii=False),
+                json.dumps(
+                    self._response.model_dump(mode="json"), indent=2, ensure_ascii=False
+                ),
                 encoding="utf-8",
             )
         except Exception as e:

@@ -11,6 +11,7 @@ Design principles:
 2. Description-driven: Loads prompts from .md files
 3. Standalone-friendly: Can be used without agent context
 """
+
 import json
 from abc import ABC, abstractmethod
 from enum import Enum
@@ -45,28 +46,39 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
 
     def __init__(
         self,
-        gemini_api_key: str,
+        api_key: str,
         model: ModelT | None = None,
         *,
-        provider: ChatProvider | None = None,
+        provider: str = "gemini",
+        provider_instance: ChatProvider | None = None,
         **kwargs,
     ):
         """
         Initialize the reasoner.
 
         Args:
-            gemini_api_key: Gemini API key (used if no custom provider is set).
+            api_key: API key for the selected provider (Gemini or OpenRouter).
             model: Model name to use.
-            provider: Optional custom provider (for extensibility).
+            provider: Type of the underlying provider ("gemini" or "openrouter").
+            provider_instance: Optional custom provider (for extensibility).
             **kwargs: Additional options for subclasses.
         """
-        self._api_key = gemini_api_key
+        self._api_key = api_key
         self._model = model
-        self._provider: ChatProvider = provider or self._create_default_provider()
+        self._provider_type = provider
+        self._provider: ChatProvider = (
+            provider_instance or self._create_default_provider()
+        )
         self._response = None
 
-    def _create_default_provider(self) -> GeminiProvider:
-        """Create the default Gemini provider."""
+    def _create_default_provider(self) -> ChatProvider:
+        """Create the default provider based on provider_type."""
+        if self._provider_type == "openrouter":
+            from .providers.openrouter.provider import OpenRouterProvider
+
+            return OpenRouterProvider(api_key=self._api_key, model=self._model)
+
+        # Default to Gemini
         return GeminiProvider(api_key=self._api_key, model=self._model)
 
     @abstractmethod
@@ -99,7 +111,9 @@ class Reasoner(ABC, Generic[ModelT, ResponseT]):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(
                     json.dumps(
-                        self._response.model_dump(mode="json"), indent=2, ensure_ascii=False
+                        self._response.model_dump(mode="json"),
+                        indent=2,
+                        ensure_ascii=False,
                     ),
                     encoding="utf-8",
                 )

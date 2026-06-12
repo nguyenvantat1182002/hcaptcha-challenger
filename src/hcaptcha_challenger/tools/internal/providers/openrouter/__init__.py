@@ -1,0 +1,3 @@
+"""
+OpenRouter provider module.
+"""
