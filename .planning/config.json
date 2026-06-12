@@ -1,0 +1,11 @@
+{
+  "workflow": {
+    "auto_approve": false,
+    "strict_mode": true
+  },
+  "project": {
+    "name": "openrouter-agent",
+    "language": "python",
+    "environment": "venv"
+  }
+}
