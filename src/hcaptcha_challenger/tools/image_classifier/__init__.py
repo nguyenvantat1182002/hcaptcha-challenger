@@ -57,7 +57,11 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
         )
 
     async def __call__(
-        self, *, challenge_screenshot: Union[str, Path], **kwargs
+        self,
+        *,
+        challenge_screenshot: Union[str, Path],
+        auxiliary_information: str | None = None,
+        **kwargs
     ) -> ImageBinaryChallenge:
         """
         Analyze a 9-grid challenge and return the solution coordinates.
@@ -69,9 +73,13 @@ class ImageClassifier(Reasoner[SCoTModelType, ImageBinaryChallenge]):
         Returns:
             ImageBinaryChallenge containing the selected cell coordinates.
         """
+        user_prompt = "Solve the challenge, use [0,0] ~ [2,2] to locate 9grid, output the coordinates of the correct answer as JSON."
+        if auxiliary_information:
+            user_prompt = f"{user_prompt}\n\n{auxiliary_information}"
+
         return await self._provider.generate_with_images(
             images=[Path(challenge_screenshot)],
-            user_prompt="Solve the challenge, use [0,0] ~ [2,2] to locate 9grid, output the coordinates of the correct answer as JSON.",
+            user_prompt=user_prompt,
             description=self.description,
             response_schema=ImageBinaryChallenge,
             **kwargs,

@@ -56,7 +56,8 @@ class AgentV:
     async def _task_handler(self, response: Response):
         if response.url.endswith("/hsw.js"):
             try:
-                hsw_text = await response.text()
+                api_response = await self.page.request.get(response.url)
+                hsw_text = await api_response.text()
                 await self.page.evaluate(hsw_text)
             except Exception as err:
                 logger.error(f"An error occurred while injecting hsw script: {err}")
@@ -314,6 +315,7 @@ class AgentV:
         else:
             # Match: Timeout / Loss
             if not cr or not cr.is_pass:
+                self.robotic_arm.report_challenge_failure()
                 if self.config.RETRY_ON_FAILURE:
                     logger.warning("Failed to challenge, try to retry the strategy")
                     await self.page.wait_for_timeout(2000)

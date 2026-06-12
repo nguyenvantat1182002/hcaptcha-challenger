@@ -22,6 +22,7 @@ from hcaptcha_challenger.tools import (
     SpatialPathReasoner,
     SpatialPointReasoner,
 )
+from hcaptcha_challenger.tools.supervisor import SupervisorReasoner, SupervisorCache
 from hcaptcha_challenger.agent.config import AgentConfig
 
 
@@ -117,10 +118,21 @@ class RoboticArm:
             model=self.config.SPATIAL_POINT_REASONER_MODEL,
             timeout=self.config.LLM_TIMEOUT,
         )
+        self._supervisor_reasoner = SupervisorReasoner(
+            api_key=self.config.active_api_key,
+            provider=self.config.active_provider,
+            model=self.config.SUPERVISOR_MODEL,
+            timeout=self.config.LLM_TIMEOUT,
+        )
+        self._supervisor_cache = SupervisorCache(
+            cache_file=Path(self.config.cache_dir, "supervisor_guidelines.json"),
+            invalidation_threshold=self.config.SUPERVISOR_INVALIDATION_THRESHOLD,
+        )
         self._skill_manager = SkillManager(agent_config=config)
         self.signal_crumb_count: int | None = None
         self.captcha_payload: CaptchaPayload | None = None
         self._challenge_prompt: str | None = None
+        self.last_user_prompt: str | None = None
 
         self._checkbox_selector = "//iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=checkbox')]"
         self._challenge_selector = "//iframe[starts-with(@src,'https://newassets.hcaptcha.com/captcha/v1/') and contains(@src, 'frame=challenge')]"
@@ -206,11 +218,42 @@ class RoboticArm:
                 else self._challenge_prompt
             )
             if challenge_prompt and isinstance(challenge_prompt, str):
-                return self._skill_manager.get_skill(challenge_prompt, job_type)
+                self.last_user_prompt = challenge_prompt
+                prompt = self._skill_manager.get_skill(challenge_prompt, job_type)
+                return prompt
         except Exception as e:
             logger.warning(f"Error while processing captcha payload: {e}")
 
-        return f"Please note that the current task type is: {job_type.value}"
+        prompt = f"Please note that the current task type is: {job_type.value}"
+        self.last_user_prompt = prompt
+        return prompt
+
+    def report_challenge_failure(self):
+        """Called by Challenger when a challenge submission fails."""
+        if self.config.ENABLE_SUPERVISOR and self.last_user_prompt:
+            self._supervisor_cache.increment_fail_count(self.last_user_prompt)
+
+    async def _get_or_generate_guideline(self, challenge_prompt: str, challenge_screenshot: Path) -> str:
+        if not self.config.ENABLE_SUPERVISOR:
+            return ""
+
+        # Check cache first
+        cached_guideline = self._supervisor_cache.get_guideline(challenge_prompt)
+        if cached_guideline:
+            return cached_guideline
+
+        # Generate new guideline
+        try:
+            guideline = await self._supervisor_reasoner(
+                challenge_prompt=challenge_prompt,
+                challenge_screenshot=challenge_screenshot,
+            )
+            if guideline:
+                self._supervisor_cache.save_guideline(challenge_prompt, guideline)
+            return guideline
+        except Exception as e:
+            logger.error(f"Failed to generate supervisor guideline: {e}")
+            return "Please follow the standard rules for this challenge."
 
     async def click_by_mouse(self, locator: Locator):
         bbox = await locator.bounding_box()
@@ -440,9 +483,15 @@ class RoboticArm:
             )
             await challenge_view.screenshot(type="png", path=challenge_screenshot)
 
+            user_prompt = self._match_user_prompt(RequestType.IMAGE_LABEL_BINARY)
+            short_prompt = self.last_user_prompt or user_prompt
+            guideline = await self._get_or_generate_guideline(short_prompt, challenge_screenshot)
+            enhanced_prompt = f"{user_prompt}\n\n## SUPERVISOR GUIDANCE\n{guideline}" if guideline else user_prompt
+
             # Image classification
             response = await self._image_classifier(
-                challenge_screenshot=challenge_screenshot
+                challenge_screenshot=challenge_screenshot,
+                auxiliary_information=enhanced_prompt,
             )
             boolean_matrix = response.convert_box_to_boolean_matrix()
 
@@ -493,11 +542,14 @@ class RoboticArm:
             )
 
             user_prompt = self._match_user_prompt(job_type)
+            short_prompt = self.last_user_prompt or user_prompt
+            guideline = await self._get_or_generate_guideline(short_prompt, raw)
+            enhanced_prompt = f"{user_prompt}\n\n## SUPERVISOR GUIDANCE\n{guideline}" if guideline else user_prompt
 
             response = await self._spatial_path_reasoner(
                 challenge_screenshot=raw,
                 grid_divisions=projection,
-                auxiliary_information=user_prompt,
+                auxiliary_information=enhanced_prompt,
             )
             logger.debug(
                 f"[{cid + 1}/{crumb_count}]ToolInvokeMessage: {response.log_message}"
@@ -538,11 +590,14 @@ class RoboticArm:
             )
 
             user_prompt = self._match_user_prompt(job_type)
+            short_prompt = self.last_user_prompt or user_prompt
+            guideline = await self._get_or_generate_guideline(short_prompt, raw)
+            enhanced_prompt = f"{user_prompt}\n\n## SUPERVISOR GUIDANCE\n{guideline}" if guideline else user_prompt
 
             response = await self._spatial_point_reasoner(
                 challenge_screenshot=raw,
                 grid_divisions=projection,
-                auxiliary_information=user_prompt,
+                auxiliary_information=enhanced_prompt,
             )
             logger.debug(
                 f"[{cid + 1}/{crumb_count}]ToolInvokeMessage: {response.log_message}"

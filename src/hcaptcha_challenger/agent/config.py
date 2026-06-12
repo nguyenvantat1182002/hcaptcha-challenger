@@ -104,6 +104,18 @@ class AgentConfig(BaseSettings):
         default=DEFAULT_SCOT_MODEL,
         description="For the challenge type: `image_drag_drop` (single/multi)",
     )
+    SUPERVISOR_MODEL: SCoTModelType = Field(
+        default=DEFAULT_SCOT_MODEL,
+        description="For dynamically generating reusable guidelines for solver LLMs",
+    )
+    SUPERVISOR_INVALIDATION_THRESHOLD: int = Field(
+        default=3,
+        description="Number of consecutive failures before the Supervisor guideline is regenerated",
+    )
+    ENABLE_SUPERVISOR: bool = Field(
+        default=True,
+        description="Toggle the Supervisor LLM generation on or off",
+    )
 
     coordinate_grid: CoordinateGrid | None = Field(default_factory=CoordinateGrid)
 
