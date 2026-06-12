@@ -21,9 +21,10 @@ from hcaptcha_challenger.agent.robotic_arm import RoboticArm
 
 
 class AgentV:
-    def __init__(self, page: Page, agent_config: AgentConfig):
+    def __init__(self, page: Page, agent_config: AgentConfig, skip_url_keywords: List[str] | None = None):
         self.page = page
         self.config = agent_config
+        self.skip_url_keywords = skip_url_keywords
 
         self.robotic_arm = RoboticArm(page=page, config=agent_config)
 
@@ -54,6 +55,14 @@ class AgentV:
 
     @logger.catch
     async def _task_handler(self, response: Response):
+        if self.skip_url_keywords and any(kw in response.url for kw in self.skip_url_keywords):
+            if not getattr(self, "_skip_notified", False):
+                logger.debug(f"Skipping challenge because URL matched skip_url_keywords: {response.url}")
+                self._skip_notified = True
+                self._captcha_payload_queue.put_nowait(None)
+                self._captcha_response_queue.put_nowait(CaptchaResponse(error="skipped_by_url_keyword", is_pass=True))
+            return
+
         if response.url.endswith("/hsw.js"):
             try:
                 api_response = await self.page.request.get(response.url)
@@ -147,6 +156,9 @@ class AgentV:
             logger.error("Wait for captcha payload to timeout")
             self._captcha_payload = None
 
+        if getattr(self, "_skip_notified", False):
+            return "SKIP"
+
         self.robotic_arm.signal_crumb_count = None
         self.robotic_arm.captcha_payload = None
         if not self._captcha_payload:
@@ -190,6 +202,8 @@ class AgentV:
 
     async def _solve_captcha(self):
         challenge_type = await self._review_challenge_type()
+        if challenge_type == "SKIP":
+            return
         
         model_name = "unknown"
         if challenge_type == RequestType.IMAGE_LABEL_BINARY:
