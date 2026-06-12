@@ -134,10 +134,6 @@ class GuidanceManager:
             self.clear_guidance(challenge_prompt)
 
     def record_success(self, challenge_prompt: str):
-        with self.memory_lock:
-            self.cache.update(self._load_cache())
-            cached_item = self.cache.get(challenge_prompt)
-            if isinstance(cached_item, dict) and cached_item.get("failures", 0) > 0:
-                cached_item["failures"] = 0
-                self.cache[challenge_prompt] = cached_item
-                self._save_cache()
+        # Theo yêu cầu code review, khi giải đúng thì KHÔNG ép failures về 0 nữa.
+        # Điều này sẽ khiến failure count mang tính chất cộng dồn (cumulative) thay vì liên tiếp (consecutive).
+        pass

@@ -57,14 +57,12 @@ def test_guidance_manager_failure_tracking(temp_cache_file):
     data = manager._load_cache()
     assert data[prompt]["failures"] == 2
     
-    # Test record_success
+    # Test record_success no longer resets failures
     manager.record_success(prompt)
     data = manager._load_cache()
-    assert data[prompt]["failures"] == 0
+    assert data[prompt]["failures"] == 2
     
-    # Test reaching threshold
-    manager.record_failure(prompt, max_failures=3)
-    manager.record_failure(prompt, max_failures=3)
+    # Test reaching threshold (only 1 more needed to reach 3)
     manager.record_failure(prompt, max_failures=3)
     
     data = manager._load_cache()
