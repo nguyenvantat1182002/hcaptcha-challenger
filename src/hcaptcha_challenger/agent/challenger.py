@@ -63,7 +63,7 @@ class AgentV:
                 logger.debug(f"Skipping challenge because URL matched skip_url_keywords: {response.url}")
                 self._skip_notified = True
                 self._captcha_payload_queue.put_nowait(None)
-                self._captcha_response_queue.put_nowait(CaptchaResponse(error="skipped_by_url_keyword", is_pass=True))
+                self._captcha_response_queue.put_nowait(CaptchaResponse(**{"pass": True, "error": "skipped_by_url_keyword"}))
             return
 
         if response.url.endswith("/hsw.js"):
@@ -206,7 +206,7 @@ class AgentV:
         challenge_type = await self._review_challenge_type()
         if challenge_type == "SKIP":
             if self._captcha_response_queue.empty():
-                self._captcha_response_queue.put_nowait(CaptchaResponse(error="skipped_by_unknown_type", is_pass=True))
+                self._captcha_response_queue.put_nowait(CaptchaResponse(**{"pass": True, "error": "skipped_by_unknown_type"}))
             return
         
         model_name = "unknown"
