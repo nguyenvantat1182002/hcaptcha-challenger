@@ -44,6 +44,11 @@ class AgentConfig(BaseSettings):
     ignore_request_types: IGNORE_REQUEST_TYPE_LIST | None = Field(default_factory=list)
     ignore_request_questions: List[str] | None = Field(default_factory=list)
 
+    ENABLE_CAPTCHA_CACHE: bool = Field(
+        default=True,
+        description="Enable saving validated captcha responses to local cache files.",
+    )
+
     DISABLE_BEZIER_TRAJECTORY: bool = Field(
         default=False,
         description="If you use Camoufox, it is recommended to turn off "

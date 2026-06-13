@@ -41,6 +41,9 @@ class AgentV:
 
         self.cr_list.append(cr)
 
+        if not self.config.ENABLE_CAPTCHA_CACHE:
+            return
+
         try:
             captcha_response = cr.model_dump(mode="json", by_alias=True)
             current_time = datetime.now().strftime("%Y%m%d/%Y%m%d%H%M%S%f")
