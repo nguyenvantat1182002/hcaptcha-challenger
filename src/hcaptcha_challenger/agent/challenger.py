@@ -199,9 +199,8 @@ class AgentV:
             logger.warning(f"Unknown request_type: {request_type=}")
         except Exception as err:
             logger.error(f"Error parsing challenge type: {err}")
-
-        # Fallback to visual recognition solution
-        return await self.robotic_arm.check_challenge_type()
+        
+        return "SKIP"
 
     async def _solve_captcha(self):
         challenge_type = await self._review_challenge_type()
