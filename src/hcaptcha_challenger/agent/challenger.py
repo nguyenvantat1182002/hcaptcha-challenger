@@ -205,6 +205,8 @@ class AgentV:
     async def _solve_captcha(self):
         challenge_type = await self._review_challenge_type()
         if challenge_type == "SKIP":
+            if self._captcha_response_queue.empty():
+                self._captcha_response_queue.put_nowait(CaptchaResponse(error="skipped_by_unknown_type", is_pass=True))
             return
         
         model_name = "unknown"
