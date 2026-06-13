@@ -74,10 +74,10 @@ class AgentV:
                 # Wrap in IIFE to prevent "btoa is read-only" error in Camoufox
                 wrapped_hsw = f"""
                 (function() {{
-                    var btoa = window.btoa;
-                    var atob = window.atob;
-                    var setTimeout = window.setTimeout;
-                    var setInterval = window.setInterval;
+                    var btoa = window.btoa.bind(window);
+                    var atob = window.atob.bind(window);
+                    var setTimeout = window.setTimeout.bind(window);
+                    var setInterval = window.setInterval.bind(window);
                     {hsw_text}
                     if (typeof hsw !== 'undefined') {{
                         window.hsw = hsw;
