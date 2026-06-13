@@ -70,21 +70,7 @@ class AgentV:
             try:
                 api_response = await self.page.request.get(response.url)
                 hsw_text = await api_response.text()
-                
-                # Wrap in IIFE to prevent "btoa is read-only" error in Camoufox
-                wrapped_hsw = f"""
-                (function() {{
-                    var btoa = window.btoa.bind(window);
-                    var atob = window.atob.bind(window);
-                    var setTimeout = window.setTimeout.bind(window);
-                    var setInterval = window.setInterval.bind(window);
-                    {hsw_text}
-                    if (typeof hsw !== 'undefined') {{
-                        window.hsw = hsw;
-                    }}
-                }})()
-                """
-                await self.page.evaluate(wrapped_hsw)
+                await self.page.evaluate(hsw_text)
             except Exception as err:
                 logger.error(f"An error occurred while injecting hsw script: {err}")
         elif "/getcaptcha/" in response.url:
