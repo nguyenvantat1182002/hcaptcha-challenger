@@ -21,7 +21,7 @@ from hcaptcha_challenger.agent.robotic_arm import RoboticArm
 
 
 class AgentV:
-    def __init__(self, page: Page, agent_config: AgentConfig, skip_url_keywords: List[str] | None = None):
+    def __init__(self, page: Page, agent_config: AgentConfig, skip_url_keywords: List[str | tuple | dict] | None = None):
         self.page = page
         self.config = agent_config
         self.skip_url_keywords = skip_url_keywords
@@ -58,13 +58,30 @@ class AgentV:
 
     @logger.catch
     async def _task_handler(self, response: Response):
-        if self.skip_url_keywords and any(kw in response.url for kw in self.skip_url_keywords):
-            if not getattr(self, "_skip_notified", False):
-                logger.debug(f"Skipping challenge because URL matched skip_url_keywords: {response.url}")
-                self._skip_notified = True
-                self._captcha_payload_queue.put_nowait(None)
-                self._captcha_response_queue.put_nowait(CaptchaResponse(**{"pass": True, "error": "skipped_by_url_keyword"}))
-            return
+        if self.skip_url_keywords:
+            skip_match = False
+            for rule in self.skip_url_keywords:
+                if isinstance(rule, str) and rule in response.url:
+                    skip_match = True
+                    break
+                elif isinstance(rule, tuple) and len(rule) == 2:
+                    if rule[0].upper() == response.request.method.upper() and rule[1] in response.url:
+                        skip_match = True
+                        break
+                elif isinstance(rule, dict):
+                    method = rule.get("method", "").upper()
+                    keyword = rule.get("url", rule.get("keyword", ""))
+                    if (not method or method == response.request.method.upper()) and keyword in response.url:
+                        skip_match = True
+                        break
+            
+            if skip_match:
+                if not getattr(self, "_skip_notified", False):
+                    logger.debug(f"Skipping challenge because URL matched skip_url_keywords: {response.url}")
+                    self._skip_notified = True
+                    self._captcha_payload_queue.put_nowait(None)
+                    self._captcha_response_queue.put_nowait(CaptchaResponse(**{"pass": True, "error": "skipped_by_url_keyword"}))
+                return
 
         if response.url.endswith("/hsw.js"):
             try:
