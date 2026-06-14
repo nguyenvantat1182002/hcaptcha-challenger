@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 from typing import Optional
 
+from filelock import FileLock
 from loguru import logger
 
 
@@ -14,12 +15,15 @@ class SupervisorCache:
 
     def __init__(self, cache_file: Path, invalidation_threshold: int = 3):
         self.cache_file = cache_file
+        self.lock_file = cache_file.with_suffix(".lock")
         self.threshold = invalidation_threshold
 
         # Initialize cache file if it doesn't exist
         if not self.cache_file.exists():
             self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-            self._save({})
+            with FileLock(self.lock_file, timeout=10):
+                if not self.cache_file.exists():
+                    self._save({})
 
     def _load(self) -> dict:
         try:
@@ -41,40 +45,43 @@ class SupervisorCache:
         Retrieves the guideline for the given prompt if it exists and hasn't exceeded the failure threshold.
         If the threshold is exceeded, the guideline is invalidated (deleted) and None is returned.
         """
-        data = self._load()
-        if prompt not in data:
+        with FileLock(self.lock_file, timeout=10):
+            data = self._load()
+            if prompt not in data:
+                return None
+    
+            entry = data[prompt]
+            fail_count = entry.get("fail_count", 0)
+    
+            if fail_count < self.threshold:
+                logger.debug(f"Cache hit for supervisor guideline (fails: {fail_count}/{self.threshold})")
+                return entry.get("guideline")
+    
+            logger.info(f"Invalidating supervisor guideline cache for prompt (fails: {fail_count} >= {self.threshold}): '{prompt}'")
+            del data[prompt]
+            self._save(data)
             return None
-
-        entry = data[prompt]
-        fail_count = entry.get("fail_count", 0)
-
-        if fail_count < self.threshold:
-            logger.debug(f"Cache hit for supervisor guideline (fails: {fail_count}/{self.threshold})")
-            return entry.get("guideline")
-
-        logger.info(f"Invalidating supervisor guideline cache for prompt (fails: {fail_count} >= {self.threshold}): '{prompt}'")
-        del data[prompt]
-        self._save(data)
-        return None
 
     def save_guideline(self, prompt: str, guideline: str):
         """
         Saves a newly generated guideline and resets the fail count to 0.
         """
-        data = self._load()
-        data[prompt] = {
-            "guideline": guideline,
-            "fail_count": 0
-        }
-        self._save(data)
-        logger.debug("Saved new supervisor guideline to cache.")
+        with FileLock(self.lock_file, timeout=10):
+            data = self._load()
+            data[prompt] = {
+                "guideline": guideline,
+                "fail_count": 0
+            }
+            self._save(data)
+            logger.debug("Saved new supervisor guideline to cache.")
 
     def increment_fail_count(self, prompt: str):
         """
         Increments the consecutive failure count for a cached guideline.
         """
-        data = self._load()
-        if prompt in data:
-            data[prompt]["fail_count"] = data[prompt].get("fail_count", 0) + 1
-            self._save(data)
-            logger.debug(f"Incremented supervisor fail count for '{prompt}' to {data[prompt]['fail_count']}")
+        with FileLock(self.lock_file, timeout=10):
+            data = self._load()
+            if prompt in data:
+                data[prompt]["fail_count"] = data[prompt].get("fail_count", 0) + 1
+                self._save(data)
+                logger.debug(f"Incremented supervisor fail count for '{prompt}' to {data[prompt]['fail_count']}")

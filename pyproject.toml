@@ -17,6 +17,7 @@ dependencies = [
     "camoufox>=0.4.11",
     "openai>=1.14.0",
     "pyee>=11.0.0",
+    "filelock>=3.29.4",
 ]
 requires-python = ">=3.10"
 authors = [
