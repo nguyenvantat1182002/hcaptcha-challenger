@@ -59,25 +59,25 @@ class AgentV:
     @logger.catch
     async def _task_handler(self, response: Response):
         if self.skip_url_keywords:
-            skip_match = False
+            matched_rule = None
             for rule in self.skip_url_keywords:
                 if isinstance(rule, str) and rule in response.url:
-                    skip_match = True
+                    matched_rule = rule
                     break
                 elif isinstance(rule, tuple) and len(rule) == 2:
                     if rule[0].upper() == response.request.method.upper() and rule[1] in response.url:
-                        skip_match = True
+                        matched_rule = f"{rule[0].upper()} {rule[1]}"
                         break
                 elif isinstance(rule, dict):
                     method = rule.get("method", "").upper()
                     keyword = rule.get("url", rule.get("keyword", ""))
                     if (not method or method == response.request.method.upper()) and keyword in response.url:
-                        skip_match = True
+                        matched_rule = f"{method or 'ANY'} {keyword}"
                         break
             
-            if skip_match:
+            if matched_rule:
                 if not getattr(self, "_skip_notified", False):
-                    logger.debug(f"Skipping challenge because URL matched skip_url_keywords: {response.url}")
+                    logger.debug(f"Skip challenge by rule: {matched_rule}")
                     self._skip_notified = True
                     self._captcha_payload_queue.put_nowait(None)
                     self._captcha_response_queue.put_nowait(CaptchaResponse(**{"pass": True, "error": "skipped_by_url_keyword"}))
