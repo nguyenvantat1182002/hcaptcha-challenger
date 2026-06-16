@@ -121,6 +121,19 @@ class AgentConfig(BaseSettings):
         default=True,
         description="Toggle the Supervisor LLM generation on or off",
     )
+    ENABLE_GUIDANCE_REGENERATION: bool = Field(
+        default=True,
+        description="Toggle whether to automatically regenerate guidance when it fails too many times.",
+    )
+    MIN_SUCCESS_RATE_THRESHOLD: float = Field(
+        default=20.0,
+        description="Minimum success rate percentage to continue solving a challenge type. "
+        "If the success rate is below this threshold, the challenge will be skipped."
+    )
+    MIN_ATTEMPTS_BEFORE_SKIP: int = Field(
+        default=5,
+        description="Minimum number of attempts before evaluating the success rate to skip."
+    )
 
     coordinate_grid: CoordinateGrid | None = Field(default_factory=CoordinateGrid)
 

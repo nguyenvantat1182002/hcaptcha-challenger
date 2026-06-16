@@ -127,6 +127,7 @@ class RoboticArm:
         self._supervisor_cache = SupervisorCache(
             cache_file=Path(self.config.cache_dir, "supervisor_guidelines.json"),
             invalidation_threshold=self.config.SUPERVISOR_INVALIDATION_THRESHOLD,
+            enable_regeneration=self.config.ENABLE_GUIDANCE_REGENERATION,
         )
         self._skill_manager = SkillManager(agent_config=config)
         self.signal_crumb_count: int | None = None
@@ -232,6 +233,13 @@ class RoboticArm:
         """Called by Challenger when a challenge submission fails."""
         if self.config.ENABLE_SUPERVISOR and self.last_user_prompt:
             self._supervisor_cache.increment_fail_count(self.last_user_prompt)
+        self.last_user_prompt = None
+
+    def report_challenge_success(self):
+        """Called by Challenger when a challenge submission succeeds."""
+        if self.config.ENABLE_SUPERVISOR and self.last_user_prompt:
+            self._supervisor_cache.increment_success_count(self.last_user_prompt)
+        self.last_user_prompt = None
 
     async def _get_or_generate_guideline(self, challenge_prompt: str, challenge_screenshot: Path) -> str:
         if not self.config.ENABLE_SUPERVISOR:
@@ -485,6 +493,16 @@ class RoboticArm:
 
             user_prompt = self._match_user_prompt(RequestType.IMAGE_LABEL_BINARY)
             short_prompt = self.last_user_prompt or user_prompt
+            
+            if self._supervisor_cache.should_skip_challenge(
+                short_prompt, 
+                self.config.MIN_SUCCESS_RATE_THRESHOLD, 
+                self.config.MIN_ATTEMPTS_BEFORE_SKIP
+            ):
+                logger.warning(f"Skipping challenge '{short_prompt}' due to low success rate.")
+                self.last_user_prompt = None
+                return
+                
             guideline = await self._get_or_generate_guideline(short_prompt, challenge_screenshot)
             enhanced_prompt = f"{user_prompt}\n\n## SUPERVISOR GUIDANCE\n{guideline}" if guideline else user_prompt
 
@@ -543,6 +561,16 @@ class RoboticArm:
 
             user_prompt = self._match_user_prompt(job_type)
             short_prompt = self.last_user_prompt or user_prompt
+            
+            if self._supervisor_cache.should_skip_challenge(
+                short_prompt, 
+                self.config.MIN_SUCCESS_RATE_THRESHOLD, 
+                self.config.MIN_ATTEMPTS_BEFORE_SKIP
+            ):
+                logger.warning(f"Skipping challenge '{short_prompt}' due to low success rate.")
+                self.last_user_prompt = None
+                return
+                
             guideline = await self._get_or_generate_guideline(short_prompt, raw)
             enhanced_prompt = f"{user_prompt}\n\n## SUPERVISOR GUIDANCE\n{guideline}" if guideline else user_prompt
 
@@ -591,6 +619,16 @@ class RoboticArm:
 
             user_prompt = self._match_user_prompt(job_type)
             short_prompt = self.last_user_prompt or user_prompt
+            
+            if self._supervisor_cache.should_skip_challenge(
+                short_prompt, 
+                self.config.MIN_SUCCESS_RATE_THRESHOLD, 
+                self.config.MIN_ATTEMPTS_BEFORE_SKIP
+            ):
+                logger.warning(f"Skipping challenge '{short_prompt}' due to low success rate.")
+                self.last_user_prompt = None
+                return
+                
             guideline = await self._get_or_generate_guideline(short_prompt, raw)
             enhanced_prompt = f"{user_prompt}\n\n## SUPERVISOR GUIDANCE\n{guideline}" if guideline else user_prompt
 

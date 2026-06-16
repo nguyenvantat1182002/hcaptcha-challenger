@@ -13,10 +13,11 @@ class SupervisorCache:
     the failure count exceeds a threshold.
     """
 
-    def __init__(self, cache_file: Path, invalidation_threshold: int = 3):
+    def __init__(self, cache_file: Path, invalidation_threshold: int = 3, enable_regeneration: bool = True):
         self.cache_file = cache_file
         self.lock_file = cache_file.with_suffix(".lock")
         self.threshold = invalidation_threshold
+        self.enable_regeneration = enable_regeneration
 
         # Initialize cache file if it doesn't exist
         if not self.cache_file.exists():
@@ -53,7 +54,7 @@ class SupervisorCache:
             entry = data[prompt]
             fail_count = entry.get("fail_count", 0)
     
-            if fail_count < self.threshold:
+            if not self.enable_regeneration or fail_count < self.threshold:
                 logger.debug(f"Cache hit for supervisor guideline (fails: {fail_count}/{self.threshold})")
                 return entry.get("guideline")
     
@@ -70,7 +71,8 @@ class SupervisorCache:
             data = self._load()
             data[prompt] = {
                 "guideline": guideline,
-                "fail_count": 0
+                "fail_count": 0,
+                "success_count": 0
             }
             self._save(data)
             logger.debug("Saved new supervisor guideline to cache.")
@@ -84,4 +86,43 @@ class SupervisorCache:
             if prompt in data:
                 data[prompt]["fail_count"] = data[prompt].get("fail_count", 0) + 1
                 self._save(data)
-                logger.debug(f"Incremented supervisor fail count for '{prompt}' to {data[prompt]['fail_count']}")
+                f_count = data[prompt]["fail_count"]
+                s_count = data[prompt].get("success_count", 0)
+                total = f_count + s_count
+                rate = (s_count / total) * 100
+                logger.debug(f"Incremented supervisor fail count for '{prompt}' to {f_count}. Current Success Rate: {rate:.1f}%")
+
+    def increment_success_count(self, prompt: str):
+        """
+        Increments the success count for a cached guideline.
+        """
+        with FileLock(self.lock_file, timeout=10):
+            data = self._load()
+            if prompt in data:
+                data[prompt]["success_count"] = data[prompt].get("success_count", 0) + 1
+                self._save(data)
+                f_count = data[prompt].get("fail_count", 0)
+                s_count = data[prompt]["success_count"]
+                total = f_count + s_count
+                rate = (s_count / total) * 100
+                logger.debug(f"Incremented supervisor success count for '{prompt}' to {s_count}. Current Success Rate: {rate:.1f}%")
+
+    def should_skip_challenge(self, prompt: str, min_success_rate: float, min_attempts: int) -> bool:
+        """
+        Evaluates if the challenge should be skipped based on its historical success rate.
+        """
+        with FileLock(self.lock_file, timeout=10):
+            data = self._load()
+            if prompt in data:
+                fail_count = data[prompt].get("fail_count", 0)
+                success_count = data[prompt].get("success_count", 0)
+                total_attempts = fail_count + success_count
+                
+                if total_attempts > 0:
+                    success_rate = (success_count / total_attempts) * 100
+                    logger.info(f"Guidance Success Rate for '{prompt}': {success_rate:.1f}% ({success_count}/{total_attempts})")
+                    
+                    if total_attempts >= min_attempts:
+                        if success_rate < min_success_rate:
+                            return True
+        return False

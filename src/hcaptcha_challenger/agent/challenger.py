@@ -359,6 +359,7 @@ class AgentV:
             # Match: Success
             if cr.is_pass:
                 logger.success("Challenge success")
+                self.robotic_arm.report_challenge_success()
                 self._cache_validated_captcha_response(cr)
                 return ChallengeSignal.SUCCESS
 
