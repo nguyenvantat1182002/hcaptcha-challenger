@@ -114,7 +114,7 @@ class AgentConfig(BaseSettings):
         description="For dynamically generating reusable guidelines for solver LLMs",
     )
     SUPERVISOR_INVALIDATION_THRESHOLD: int = Field(
-        default=3,
+        default=10,
         description="Number of consecutive failures before the Supervisor guideline is regenerated",
     )
     ENABLE_SUPERVISOR: bool = Field(
