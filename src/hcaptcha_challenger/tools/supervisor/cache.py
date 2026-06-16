@@ -122,7 +122,7 @@ class SupervisorCache:
                     success_rate = (success_count / total_attempts) * 100
                     logger.info(f"Guidance Success Rate for '{prompt}': {success_rate:.1f}% ({success_count}/{total_attempts})")
                     
-                    if total_attempts >= min_attempts:
+                    if not self.enable_regeneration and total_attempts >= min_attempts:
                         if success_rate < min_success_rate:
                             return True
         return False
