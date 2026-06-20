@@ -1,3 +1,8 @@
+---
+name: hcaptcha-solver
+description: "Instruction manual for integrating with the local hcaptcha-challenger API to autonomously bypass hCaptcha challenges."
+---
+
 # System Prompt / AI Agent Skill: hCaptcha Solver API
 
 > **Notice to AI Agents**: This document is an instruction manual for integrating with the local `hcaptcha-challenger` API. Read these instructions carefully to autonomously bypass hCaptcha challenges during your execution workflows. Do **not** look for external helper scripts; you are expected to write and execute the HTTP request code yourself using the language of your current environment (e.g., Python or Node.js).
