@@ -42,6 +42,8 @@ def solve():
         challenge_type = data.get("challenge_type")
         timeout = data.get("timeout")
         
+        logger.info(f"Received solve request - prompt: '{prompt}', challenge_type: '{challenge_type}', timeout: {timeout}")
+        
         solver = SolverService(timeout=timeout)
         
         # Run the async solver in a new event loop for this request
