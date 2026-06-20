@@ -126,3 +126,45 @@ class SupervisorCache:
                         if success_rate < min_success_rate:
                             return True
         return False
+
+    def get_all_stats(self) -> dict:
+        """
+        Calculates the success rate across all cached challenge prompts,
+        including a detailed breakdown per prompt.
+        """
+        with FileLock(self.lock_file, timeout=10):
+            data = self._load()
+            total_success = 0
+            total_fail = 0
+            
+            prompts_stats = {}
+            
+            for prompt, prompt_data in data.items():
+                s_count = prompt_data.get("success_count", 0)
+                f_count = prompt_data.get("fail_count", 0)
+                p_total = s_count + f_count
+                p_rate = (s_count / p_total * 100) if p_total > 0 else 0.0
+                
+                prompts_stats[prompt] = {
+                    "successful_attempts": s_count,
+                    "failed_attempts": f_count,
+                    "total_attempts": p_total,
+                    "success_rate_percent": round(p_rate, 2)
+                }
+                
+                total_success += s_count
+                total_fail += f_count
+                
+            total_attempts = total_success + total_fail
+            success_rate = (total_success / total_attempts * 100) if total_attempts > 0 else 0.0
+            
+            return {
+                "global": {
+                    "total_prompts_tracked": len(data),
+                    "total_attempts": total_attempts,
+                    "successful_attempts": total_success,
+                    "failed_attempts": total_fail,
+                    "success_rate_percent": round(success_rate, 2)
+                },
+                "prompts": prompts_stats
+            }

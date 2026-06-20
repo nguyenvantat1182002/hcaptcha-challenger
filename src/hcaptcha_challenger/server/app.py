@@ -7,12 +7,21 @@ app = Flask(__name__)
 
 # (Removed singleton initialization)
 
+from pathlib import Path
+from hcaptcha_challenger.agent.config import AgentConfig
+from hcaptcha_challenger.tools.supervisor import SupervisorCache
+
 @app.route("/health", methods=["GET"])
 def health_check():
     """Simple health check endpoint."""
+    config = AgentConfig()
+    cache = SupervisorCache(
+        cache_file=Path(config.cache_dir, "supervisor_guidelines.json")
+    )
     return jsonify({
         "status": "ok",
-        "version": "0.19.0"
+        "version": "0.19.0",
+        "solve_stats": cache.get_all_stats()
     })
 
 import asyncio
