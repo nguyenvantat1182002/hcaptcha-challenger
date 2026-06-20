@@ -11,6 +11,9 @@ def run_server(
     dev: bool = typer.Option(False, "--dev", help="Run in development mode using standard Flask server")
 ):
     from hcaptcha_challenger.server.app import app as flask_app
+    from hcaptcha_challenger.utils import init_log
+    
+    init_log()
     
     if dev:
         logger.info(f"Starting Flask development server on {host}:{port}")
