@@ -1,16 +1,11 @@
 from flask import Flask, jsonify, request
 from loguru import logger
 
-from hcaptcha_challenger.server.solve import get_solver_service
+from hcaptcha_challenger.server.solve import SolverService
 
 app = Flask(__name__)
 
-# Initialize the solver service when the app starts
-with app.app_context():
-    try:
-        get_solver_service()
-    except Exception as e:
-        logger.error(f"Failed to initialize SolverService: {e}")
+# (Removed singleton initialization)
 
 @app.route("/health", methods=["GET"])
 def health_check():
@@ -36,14 +31,16 @@ def solve():
         prompt = data.get("prompt")
         image_b64 = data.get("image")
         challenge_type = data.get("challenge_type")
+        timeout = data.get("timeout")
         
-        if not prompt or not image_b64:
-            return jsonify({"success": False, "error": "Missing 'prompt' or 'image' in payload"}), 400
-            
-        solver = get_solver_service()
+        solver = SolverService(timeout=timeout)
         
         # Run the async solver in a new event loop for this request
-        coordinates = asyncio.run(solver.solve_challenge(prompt, image_b64, challenge_type))
+        coordinates = asyncio.run(solver.solve_challenge(
+            prompt=prompt, 
+            image_b64=image_b64, 
+            challenge_type=challenge_type
+        ))
         
         return jsonify({
             "success": True,
