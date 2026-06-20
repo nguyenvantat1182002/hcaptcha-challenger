@@ -4,6 +4,7 @@ import typer
 
 from hcaptcha_challenger.cli import dataset
 from hcaptcha_challenger.cli import solver
+from hcaptcha_challenger.cli import server
 from hcaptcha_challenger.utils import SiteKey
 
 # Create top-level application
@@ -81,6 +82,7 @@ def help_command(
 
 app.add_typer(dataset.app, name="dataset", help="Dataset collection tool")
 app.add_typer(solver.app, name="solver", help="hCaptcha solver tool")
+app.add_typer(server.app, name="server", help="hCaptcha API server tool")
 
 DEFAULT_SITE_KEY = SiteKey.user_easy
 
