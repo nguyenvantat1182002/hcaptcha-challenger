@@ -35,6 +35,7 @@ def solve():
             
         prompt = data.get("prompt")
         image_b64 = data.get("image")
+        challenge_type = data.get("challenge_type")
         
         if not prompt or not image_b64:
             return jsonify({"success": False, "error": "Missing 'prompt' or 'image' in payload"}), 400
@@ -42,7 +43,7 @@ def solve():
         solver = get_solver_service()
         
         # Run the async solver in a new event loop for this request
-        coordinates = asyncio.run(solver.solve_challenge(prompt, image_b64))
+        coordinates = asyncio.run(solver.solve_challenge(prompt, image_b64, challenge_type))
         
         return jsonify({
             "success": True,

@@ -7,7 +7,8 @@ image_b64 = base64.b64encode(bytes.fromhex(png_hex)).decode('utf-8')
 
 response = requests.post("http://127.0.0.1:8000/solve", json={
     "prompt": "Please select all cats",
-    "image": image_b64
+    "image": image_b64,
+    "challenge_type": "image_label_single_select"
 })
 
 print(response.status_code)

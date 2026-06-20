@@ -13,7 +13,9 @@ from hcaptcha_challenger.tools import (
     SpatialPointReasoner,
     SpatialPathReasoner,
 )
+from hcaptcha_challenger.tools.supervisor import SupervisorReasoner, SupervisorCache
 from hcaptcha_challenger.models import RequestType, ChallengeTypeEnum
+import asyncio
 
 class SolverService:
     def __init__(self):
@@ -47,6 +49,18 @@ class SolverService:
             model=self.config.SPATIAL_PATH_REASONER_MODEL,
             timeout=self.config.LLM_TIMEOUT,
         )
+        
+        self.supervisor_reasoner = SupervisorReasoner(
+            api_key=self.config.active_api_key,
+            provider=self.config.active_provider,
+            model=self.config.SUPERVISOR_MODEL,
+            timeout=self.config.LLM_TIMEOUT,
+        )
+        self.supervisor_cache = SupervisorCache(
+            cache_file=Path(self.config.cache_dir, "supervisor_guidelines.json"),
+            invalidation_threshold=self.config.SUPERVISOR_INVALIDATION_THRESHOLD,
+            enable_regeneration=self.config.ENABLE_GUIDANCE_REGENERATION,
+        )
         logger.info("AI Reasoners initialized successfully.")
 
     def _generate_grid_divisions(self, image_path: Path) -> Path:
@@ -73,93 +87,126 @@ class SolverService:
         plt.imsave(grid_path, result_img)
         return Path(grid_path)
 
-    async def solve_challenge(self, prompt: str, image_b64: str) -> List[Dict[str, int]]:
+    async def _get_or_generate_guideline(self, challenge_prompt: str, challenge_screenshot: Path) -> str:
+        if not self.config.ENABLE_SUPERVISOR:
+            return ""
+
+        cached_guideline = self.supervisor_cache.get_guideline(challenge_prompt)
+        if cached_guideline:
+            return cached_guideline
+
+        try:
+            guideline = await self.supervisor_reasoner(
+                challenge_prompt=challenge_prompt,
+                challenge_screenshot=challenge_screenshot,
+            )
+            if guideline:
+                self.supervisor_cache.save_guideline(challenge_prompt, guideline)
+            return guideline
+        except Exception as e:
+            logger.error(f"Failed to generate supervisor guideline: {e}")
+            return "Please follow the standard rules for this challenge."
+
+    async def solve_challenge(self, prompt: str, image_b64: str, challenge_type: str = None) -> List[Dict[str, int]]:
         """
         Processes a challenge with base64 image and prompt.
         Returns a list of coordinates or path dictionaries.
         """
-        # Save base64 to temp file
-        img_data = base64.b64decode(image_b64)
-        fd, temp_path = tempfile.mkstemp(suffix=".png")
+        async def _solve():
+            # Save base64 to temp file
+            img_data = base64.b64decode(image_b64)
+            fd, temp_path = tempfile.mkstemp(suffix=".png")
+            try:
+                with os.fdopen(fd, 'wb') as f:
+                    f.write(img_data)
+                
+                temp_file_path = Path(temp_path)
+                
+                # Determine the challenge type if not provided
+                nonlocal challenge_type
+                if challenge_type is None:
+                    logger.debug(f"Routing challenge for prompt: '{prompt}'")
+                    router_result = await self.router(challenge_screenshot=temp_file_path)
+                    challenge_type = router_result.challenge_type
+                logger.info(f"Detected challenge type: {challenge_type}")
+                
+                # Generate Supervisor Guideline
+                guideline = await self._get_or_generate_guideline(prompt, temp_file_path)
+                enhanced_prompt = f"{prompt}\n\n## SUPERVISOR GUIDANCE\n{guideline}" if guideline else prompt
+                
+                # Dispatch to appropriate tool
+                if challenge_type in (RequestType.IMAGE_LABEL_BINARY, "image_label_binary"):
+                    logger.debug("Dispatching to ImageClassifier")
+                    response = await self.image_classifier(
+                        challenge_screenshot=temp_file_path,
+                        auxiliary_information=enhanced_prompt
+                    )
+                    
+                    # ImageBinaryChallenge returns `coordinates: List[BoundingBoxCoordinate]`
+                    return [{"x": coord.box_2d[0], "y": coord.box_2d[1]} for coord in response.coordinates]
+                    
+                elif challenge_type in (
+                    ChallengeTypeEnum.IMAGE_LABEL_SINGLE_SELECT,
+                    ChallengeTypeEnum.IMAGE_LABEL_MULTI_SELECT,
+                    RequestType.IMAGE_LABEL_AREA_SELECT,
+                    "image_label_single_select",
+                    "image_label_multi_select"
+                ):
+                    logger.debug("Dispatching to SpatialPointReasoner")
+                    grid_path = self._generate_grid_divisions(temp_file_path)
+                    try:
+                        response = await self.point_reasoner(
+                            challenge_screenshot=temp_file_path,
+                            grid_divisions=grid_path,
+                            auxiliary_information=enhanced_prompt
+                        )
+                        
+                        # ImageAreaSelectChallenge returns `points: List[PointCoordinate]`
+                        return [{"x": point.x, "y": point.y} for point in response.points]
+                    finally:
+                        if os.path.exists(grid_path):
+                            os.remove(grid_path)
+                    
+                elif challenge_type in (
+                    ChallengeTypeEnum.IMAGE_DRAG_SINGLE,
+                    ChallengeTypeEnum.IMAGE_DRAG_MULTI,
+                    RequestType.IMAGE_DRAG_DROP,
+                    "image_drag_single",
+                    "image_drag_multi"
+                ):
+                    logger.debug("Dispatching to SpatialPathReasoner")
+                    grid_path = self._generate_grid_divisions(temp_file_path)
+                    try:
+                        response = await self.path_reasoner(
+                            challenge_screenshot=temp_file_path,
+                            grid_divisions=grid_path,
+                            auxiliary_information=enhanced_prompt
+                        )
+                        
+                        # ImageDragDropChallenge returns `paths: List[SpatialPath]`
+                        result = []
+                        for path in response.paths:
+                            result.append({
+                                "from": {"x": path.start_point.x, "y": path.start_point.y},
+                                "to": {"x": path.end_point.x, "y": path.end_point.y}
+                            })
+                        return result
+                    finally:
+                        if os.path.exists(grid_path):
+                            os.remove(grid_path)
+                else:
+                    logger.warning(f"Unsupported challenge type detected: {challenge_type}")
+                    return []
+                    
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
         try:
-            with os.fdopen(fd, 'wb') as f:
-                f.write(img_data)
-            
-            temp_file_path = Path(temp_path)
-            
-            # Determine the challenge type using the router
-            logger.debug(f"Routing challenge for prompt: '{prompt}'")
-            router_result = await self.router(challenge_screenshot=temp_file_path)
-            challenge_type = router_result.challenge_type
-            logger.info(f"Detected challenge type: {challenge_type}")
-            
-            # Dispatch to appropriate tool
-            if challenge_type in (RequestType.IMAGE_LABEL_BINARY, "image_label_binary"):
-                logger.debug("Dispatching to ImageClassifier")
-                response = await self.image_classifier(
-                    challenge_screenshot=temp_file_path,
-                    auxiliary_information=prompt
-                )
-                
-                # ImageBinaryChallenge returns `coordinates: List[BoundingBoxCoordinate]`
-                return [{"x": coord.box_2d[0], "y": coord.box_2d[1]} for coord in response.coordinates]
-                
-            elif challenge_type in (
-                ChallengeTypeEnum.IMAGE_LABEL_SINGLE_SELECT,
-                ChallengeTypeEnum.IMAGE_LABEL_MULTI_SELECT,
-                RequestType.IMAGE_LABEL_AREA_SELECT,
-                "image_label_single_select",
-                "image_label_multi_select"
-            ):
-                logger.debug("Dispatching to SpatialPointReasoner")
-                grid_path = self._generate_grid_divisions(temp_file_path)
-                try:
-                    response = await self.point_reasoner(
-                        challenge_screenshot=temp_file_path,
-                        grid_divisions=grid_path,
-                        auxiliary_information=prompt
-                    )
-                    
-                    # ImageAreaSelectChallenge returns `points: List[PointCoordinate]`
-                    return [{"x": point.x, "y": point.y} for point in response.points]
-                finally:
-                    if os.path.exists(grid_path):
-                        os.remove(grid_path)
-                
-            elif challenge_type in (
-                ChallengeTypeEnum.IMAGE_DRAG_SINGLE,
-                ChallengeTypeEnum.IMAGE_DRAG_MULTI,
-                RequestType.IMAGE_DRAG_DROP,
-                "image_drag_single",
-                "image_drag_multi"
-            ):
-                logger.debug("Dispatching to SpatialPathReasoner")
-                grid_path = self._generate_grid_divisions(temp_file_path)
-                try:
-                    response = await self.path_reasoner(
-                        challenge_screenshot=temp_file_path,
-                        grid_divisions=grid_path,
-                        auxiliary_information=prompt
-                    )
-                    
-                    # ImageDragDropChallenge returns `paths: List[SpatialPath]`
-                    result = []
-                    for path in response.paths:
-                        result.append({
-                            "from": {"x": path.start_point.x, "y": path.start_point.y},
-                            "to": {"x": path.end_point.x, "y": path.end_point.y}
-                        })
-                    return result
-                finally:
-                    if os.path.exists(grid_path):
-                        os.remove(grid_path)
-            else:
-                logger.warning(f"Unsupported challenge type detected: {challenge_type}")
-                return []
-                
-        finally:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+            return await asyncio.wait_for(_solve(), timeout=self.config.EXECUTION_TIMEOUT)
+        except asyncio.TimeoutError:
+            logger.error("Challenge execution timed out.")
+            return []
 
 # Global singleton instance
 solver_service = None
