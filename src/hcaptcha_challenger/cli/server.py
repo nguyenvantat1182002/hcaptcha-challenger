@@ -17,24 +17,10 @@ def run_server(
         flask_app.run(host=host, port=port, debug=True)
     else:
         # Production mode
-        if os.name == 'nt':
-            # Windows
-            logger.info(f"Starting Waitress server on {host}:{port} (Windows production)")
-            try:
-                from waitress import serve
-                serve(flask_app, host=host, port=port)
-            except ImportError:
-                logger.error("Waitress is not installed. Run 'pip install waitress' or 'uv pip install waitress'.")
-                raise typer.Exit(code=1)
-        else:
-            # Linux / Mac
-            logger.info(f"Starting Gunicorn server on {host}:{port} (Linux/Mac production)")
-            import subprocess
-            try:
-                # Gunicorn cannot be imported directly to serve via function in the same way easily,
-                # invoking via subprocess is standard or running its internal app runner.
-                cmd = ["gunicorn", "-b", f"{host}:{port}", "hcaptcha_challenger.server.app:app"]
-                subprocess.run(cmd)
-            except FileNotFoundError:
-                logger.error("Gunicorn is not installed. Run 'pip install gunicorn' or 'uv pip install gunicorn'.")
-                raise typer.Exit(code=1)
+        logger.info(f"Starting Waitress server on {host}:{port} (Production)")
+        try:
+            from waitress import serve
+            serve(flask_app, host=host, port=port)
+        except ImportError:
+            logger.error("Waitress is not installed. Run 'pip install waitress' or 'uv pip install waitress'.")
+            raise typer.Exit(code=1)

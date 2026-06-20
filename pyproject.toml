@@ -54,7 +54,6 @@ Changelog = "https://github.com/QIN2DIM/hcaptcha-challenger/blob/master/CHANGELO
 server = [
     "flask>=3.0.0",
     "waitress>=3.0.0",
-    "gunicorn>=21.0.0",
 ]
 dataset = [
     "typer"
