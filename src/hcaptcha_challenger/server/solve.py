@@ -148,7 +148,7 @@ class SolverService:
                 )
                 
                 # ImageBinaryChallenge returns `coordinates: List[BoundingBoxCoordinate]`
-                return [{"x": coord.box_2d[0], "y": coord.box_2d[1]} for coord in response.coordinates]
+                return [{"box_2d": [coord.box_2d[0], coord.box_2d[1]]} for coord in response.coordinates]
                 
             elif challenge_type in (
                 ChallengeTypeEnum.IMAGE_LABEL_SINGLE_SELECT,
