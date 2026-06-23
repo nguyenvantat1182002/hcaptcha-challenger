@@ -4,8 +4,11 @@ import httpx
 from pathlib import Path
 from typing import List, TypeVar
 
-from openai import AsyncOpenAI
-from pydantic import BaseModel
+from openai import AsyncOpenAI, APITimeoutError
+from pydantic import BaseModel, ValidationError
+from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_not_exception_type
+from loguru import logger
+import asyncio
 
 ResponseT = TypeVar("ResponseT", bound=BaseModel)
 
@@ -37,6 +40,15 @@ class OpenRouterProvider:
         with open(image_path, "rb") as image_file:
             return base64.b64encode(image_file.read()).decode("utf-8")
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(3),
+        retry=retry_if_not_exception_type((APITimeoutError, asyncio.TimeoutError)),
+        before_sleep=lambda retry_state: logger.warning(
+            f"Retry OpenRouter request ({retry_state.attempt_number}/3) - "
+            f"Wait 3 seconds - Exception: {retry_state.outcome.exception()}"
+        ),
+    )
     async def generate_with_images(
         self,
         *,
@@ -93,5 +105,10 @@ class OpenRouterProvider:
         if not response_text:
             raise ValueError("Empty response from OpenRouter")
 
-        parsed_json = json.loads(response_text)
-        return response_schema(**parsed_json)
+        try:
+            parsed_json = json.loads(response_text)
+            return response_schema(**parsed_json)
+        except Exception as e:
+            from loguru import logger
+            logger.error(f"Failed to parse or validate LLM response. Raw output: {response_text}")
+            raise e

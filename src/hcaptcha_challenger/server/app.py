@@ -62,5 +62,40 @@ def solve():
         logger.exception("Error processing /solve request")
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route("/report", methods=["POST"])
+def report():
+    """
+    Report the success or failure of a challenge to update the Supervisor cache.
+    Expects JSON payload with 'prompt' (string) and 'success' (boolean).
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "Invalid or missing JSON payload"}), 400
+            
+        prompt = data.get("prompt")
+        success = data.get("success")
+        
+        if prompt is None or success is None:
+            return jsonify({"success": False, "error": "Missing 'prompt' or 'success' in payload"}), 400
+            
+        config = AgentConfig()
+        cache = SupervisorCache(
+            cache_file=Path(config.cache_dir, "supervisor_guidelines.json")
+        )
+        
+        if success:
+            cache.increment_success_count(prompt)
+            logger.info(f"Reported success for prompt: '{prompt}'")
+        else:
+            cache.increment_fail_count(prompt)
+            logger.info(f"Reported failure for prompt: '{prompt}'")
+            
+        return jsonify({"success": True})
+        
+    except Exception as e:
+        logger.exception("Error processing /report request")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 def create_app():
     return app

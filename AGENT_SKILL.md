@@ -19,10 +19,12 @@ When you encounter an hCaptcha challenge:
 
 ## 2. API Specifications
 
+### 2.1 POST /solve
+
 **Endpoint**: `POST http://127.0.0.1:8000/solve`
 **Content-Type**: `application/json`
 
-### Request Payload (JSON)
+#### Request Payload (JSON)
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `prompt` | string | **Yes** | The challenge question (e.g., "Click on images that contain a dog"). |
@@ -30,7 +32,7 @@ When you encounter an hCaptcha challenge:
 | `challenge_type` | string | No | Type of challenge if known (e.g., `image_label_single_select`, `image_label_multiple_select`). |
 | `timeout` | float | No | Override the internal LLM timeout in seconds. |
 
-### Response Payload (JSON)
+#### Response Payload (JSON)
 | Field | Type | Description |
 |---|---|---|
 | `success` | boolean | `true` if the agent successfully analyzed the image, `false` otherwise. |
@@ -44,6 +46,27 @@ When you encounter an hCaptcha challenge:
     { "x": 125, "y": 80 },
     { "x": 300, "y": 210 }
   ]
+}
+```
+
+### 2.2 POST /report
+
+**Endpoint**: `POST http://127.0.0.1:8000/report`
+**Content-Type**: `application/json`
+
+**Description**: Used to report the final outcome of the challenge. Reporting helps the internal Supervisor AI learn from failures and dynamically update its rules.
+
+#### Request Payload (JSON)
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `prompt` | string | **Yes** | The challenge question you attempted to solve. |
+| `success` | boolean | **Yes** | `true` if hCaptcha accepted the solution, `false` if the challenge failed/rejected the clicks. |
+
+**Example Request**:
+```json
+{
+  "prompt": "Click on images that contain a dog",
+  "success": false
 }
 ```
 
@@ -87,9 +110,30 @@ def solve_hcaptcha(image_path: str, prompt: str) -> list:
         print(f"Error communicating with solver API: {e}")
         return []
 
+def report_hcaptcha(prompt: str, success: bool) -> bool:
+    """
+    Reports the success or failure of a challenge attempt.
+    """
+    payload = {
+        "prompt": prompt,
+        "success": success
+    }
+    try:
+        response = requests.post("http://127.0.0.1:8000/report", json=payload, timeout=10)
+        response.raise_for_status()
+        return True
+    except Exception as e:
+        print(f"Error reporting challenge status: {e}")
+        return False
+
 # Example usage:
-# coords = solve_hcaptcha("captcha_screenshot.jpg", "Please select all cats")
+# prompt = "Please select all cats"
+# coords = solve_hcaptcha("captcha_screenshot.jpg", prompt)
 # print(coords) # [{'x': 120, 'y': 250}, ...]
+# 
+# # After clicking the coordinates and verifying if the captcha was solved:
+# is_solved = True # Replace with actual check
+# report_hcaptcha(prompt, is_solved)
 ```
 
 ### Node.js Example
@@ -140,9 +184,42 @@ async function solveHcaptcha(imagePath, prompt) {
     }
 }
 
+async function reportHcaptcha(prompt, success) {
+    /**
+     * Reports the success or failure of a challenge attempt.
+     */
+    try {
+        const payload = {
+            prompt: prompt,
+            success: success
+        };
+
+        const response = await fetch("http://127.0.0.1:8000/report", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return true;
+    } catch (error) {
+        console.error(`Error reporting challenge status: ${error.message}`);
+        return false;
+    }
+}
+
 // Example usage:
-// solveHcaptcha("captcha_screenshot.jpg", "Please select all cats").then(coords => {
+// const prompt = "Please select all cats";
+// solveHcaptcha("captcha_screenshot.jpg", prompt).then(async (coords) => {
 //     console.log(coords); // [{ x: 120, y: 250 }, ...]
+//     
+//     // After clicking the coordinates and verifying if the captcha was solved:
+//     const isSolved = true; // Replace with actual check
+//     await reportHcaptcha(prompt, isSolved);
 // });
 ```
 

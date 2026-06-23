@@ -59,7 +59,7 @@ def _create_adaptive_contrast_grid(
     ax.set_ylim(y + height, y)
 
     ax.spines['left'].set_position(('data', x))  # type: ignore[arg-type]
-    ax.spines['top'].set_position(('data', y))  # type: ignore[arg-type]
+    ax.spines['bottom'].set_position(('data', y + height))  # type: ignore[arg-type]
 
     for spine in ax.spines.values():
         spine.set_color(grid_color)
@@ -67,11 +67,11 @@ def _create_adaptive_contrast_grid(
     ax.tick_params(axis='x', colors=grid_color, labelsize=tick_labels_size)
     ax.tick_params(axis='y', colors=grid_color, labelsize=tick_labels_size)
 
-    ax.spines['bottom'].set_visible(False)
+    ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     
-    ax.xaxis.tick_top()
-    ax.xaxis.set_label_position('top')
+    ax.xaxis.tick_bottom()
+    ax.xaxis.set_label_position('bottom')
 
     x_ticks = np.linspace(x, x + width, x_line_space_num)
     y_ticks = np.linspace(y, y + height, y_line_space_num)
@@ -184,16 +184,16 @@ def create_coordinate_grid(
     ax.set_xlim(x, x + width)
     ax.set_ylim(y + height, y)  # Inverted y-axis to match image coordinates
 
-    # Set origin in the top-left corner
+    # Set Y-axis at left, X-axis at bottom
     ax.spines['left'].set_position(('data', x))  # type: ignore[arg-type]
-    ax.spines['top'].set_position(('data', y))  # type: ignore[arg-type]
+    ax.spines['bottom'].set_position(('data', y + height))  # type: ignore[arg-type]
 
-    # Remove bottom and right spines
-    ax.spines['bottom'].set_visible(False)
+    # Remove top and right spines
+    ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     
-    ax.xaxis.tick_top()
-    ax.xaxis.set_label_position('top')
+    ax.xaxis.tick_bottom()
+    ax.xaxis.set_label_position('bottom')
 
     # Create grid lines
     x_ticks = np.linspace(x, x + width, x_line_space_num)

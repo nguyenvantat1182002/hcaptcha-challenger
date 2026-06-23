@@ -330,7 +330,7 @@ class BoundingBoxCoordinate(BaseModel):
 
 
 class ImageBinaryChallenge(BaseModel):
-    challenge_prompt: str
+    challenge_prompt: Union[str, int, None] = Field(default="")
     coordinates: List[BoundingBoxCoordinate]
 
     def convert_box_to_boolean_matrix(self) -> List[bool]:
@@ -371,7 +371,7 @@ class PointCoordinate(BaseModel):
 
 
 class ImageAreaSelectChallenge(BaseModel):
-    challenge_prompt: str
+    challenge_prompt: Union[str, int, None] = Field(default="")
     points: List[PointCoordinate]
 
     @property
@@ -387,7 +387,7 @@ class SpatialPath(BaseModel):
 
 
 class ImageDragDropChallenge(BaseModel):
-    challenge_prompt: str
+    challenge_prompt: Union[str, int, None] = Field(default="")
     paths: List[SpatialPath]
 
     @property

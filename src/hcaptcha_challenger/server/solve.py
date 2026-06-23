@@ -65,7 +65,7 @@ class SolverService:
         )
         logger.info("AI Reasoners initialized successfully.")
 
-    def _generate_grid_divisions(self, image_path: Path) -> Path:
+    def _generate_grid_divisions(self, image_path: Path, cache_key: Path) -> Path:
         import cv2
         import matplotlib.pyplot as plt
         from hcaptcha_challenger.helper import create_coordinate_grid
@@ -83,11 +83,9 @@ class SolverService:
             color=self.config.coordinate_grid.color,
         )
         
-        fd, grid_path = tempfile.mkstemp(suffix="_grid.png")
-        os.close(fd)
-        
+        grid_path = cache_key / f"{cache_key.name}_grid.png"
         plt.imsave(grid_path, result_img)
-        return Path(grid_path)
+        return grid_path
 
     async def _get_or_generate_guideline(self, challenge_prompt: str, challenge_screenshot: Path) -> str:
         if not self.config.ENABLE_SUPERVISOR:
@@ -135,16 +133,32 @@ class SolverService:
                 challenge_type = router_result.challenge_type
             logger.info(f"Detected challenge type: {challenge_type}")
             
+            # Create persistent cache structure
+            cache_key = self.config.create_cache_key(
+                request_type=str(challenge_type),
+                prompt=prompt
+            )
+            cache_key.mkdir(parents=True, exist_ok=True)
+            cache_img_path = cache_key / f"{cache_key.name}_raw.png"
+            
+            import shutil
+            shutil.move(str(temp_file_path), str(cache_img_path))
+            
+            logger.info(f"Challenge cache initialized at: {cache_key}")
+            
             # Generate Supervisor Guideline
-            guideline = await self._get_or_generate_guideline(prompt, temp_file_path)
+            guideline = await self._get_or_generate_guideline(prompt, cache_img_path)
             enhanced_prompt = f"{prompt}\n\n## SUPERVISOR GUIDANCE\n{guideline}" if guideline else prompt
             
             # Dispatch to appropriate tool
             if challenge_type in (RequestType.IMAGE_LABEL_BINARY, "image_label_binary"):
                 logger.debug("Dispatching to ImageClassifier")
                 response = await self.image_classifier(
-                    challenge_screenshot=temp_file_path,
+                    challenge_screenshot=cache_img_path,
                     auxiliary_information=enhanced_prompt
+                )
+                self.image_classifier.cache_response(
+                    path=cache_key / f"{cache_key.name}_model_answer.json"
                 )
                 
                 # ImageBinaryChallenge returns `coordinates: List[BoundingBoxCoordinate]`
@@ -158,19 +172,18 @@ class SolverService:
                 "image_label_multi_select"
             ):
                 logger.debug("Dispatching to SpatialPointReasoner")
-                grid_path = self._generate_grid_divisions(temp_file_path)
-                try:
-                    response = await self.point_reasoner(
-                        challenge_screenshot=temp_file_path,
-                        grid_divisions=grid_path,
-                        auxiliary_information=enhanced_prompt
-                    )
-                    
-                    # ImageAreaSelectChallenge returns `points: List[PointCoordinate]`
-                    return [{"x": point.x, "y": point.y} for point in response.points]
-                finally:
-                    if os.path.exists(grid_path):
-                        os.remove(grid_path)
+                grid_path = self._generate_grid_divisions(cache_img_path, cache_key)
+                response = await self.point_reasoner(
+                    challenge_screenshot=cache_img_path,
+                    grid_divisions=grid_path,
+                    auxiliary_information=enhanced_prompt
+                )
+                self.point_reasoner.cache_response(
+                    path=cache_key / f"{cache_key.name}_model_answer.json"
+                )
+                
+                # ImageAreaSelectChallenge returns `points: List[PointCoordinate]`
+                return [{"x": point.x, "y": point.y} for point in response.points]
                 
             elif challenge_type in (
                 ChallengeTypeEnum.IMAGE_DRAG_SINGLE,
@@ -180,25 +193,24 @@ class SolverService:
                 "image_drag_multi"
             ):
                 logger.debug("Dispatching to SpatialPathReasoner")
-                grid_path = self._generate_grid_divisions(temp_file_path)
-                try:
-                    response = await self.path_reasoner(
-                        challenge_screenshot=temp_file_path,
-                        grid_divisions=grid_path,
-                        auxiliary_information=enhanced_prompt
-                    )
-                    
-                    # ImageDragDropChallenge returns `paths: List[SpatialPath]`
-                    result = []
-                    for path in response.paths:
-                        result.append({
-                            "from": {"x": path.start_point.x, "y": path.start_point.y},
-                            "to": {"x": path.end_point.x, "y": path.end_point.y}
-                        })
-                    return result
-                finally:
-                    if os.path.exists(grid_path):
-                        os.remove(grid_path)
+                grid_path = self._generate_grid_divisions(cache_img_path, cache_key)
+                response = await self.path_reasoner(
+                    challenge_screenshot=cache_img_path,
+                    grid_divisions=grid_path,
+                    auxiliary_information=enhanced_prompt
+                )
+                self.path_reasoner.cache_response(
+                    path=cache_key / f"{cache_key.name}_model_answer.json"
+                )
+                
+                # ImageDragDropChallenge returns `paths: List[SpatialPath]`
+                result = []
+                for path in response.paths:
+                    result.append({
+                        "from": {"x": path.start_point.x, "y": path.start_point.y},
+                        "to": {"x": path.end_point.x, "y": path.end_point.y}
+                    })
+                return result
             else:
                 logger.warning(f"Unsupported challenge type detected: {challenge_type}")
                 return []
