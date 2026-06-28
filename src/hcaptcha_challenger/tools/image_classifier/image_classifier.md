@@ -11,3 +11,10 @@ Follow the following format to return a coordinates wrapped with a json code blo
   ]
 }
 ```
+
+## SUPERVISOR GUIDANCE (if provided)
+
+If the user message contains a section titled "SUPERVISOR GUIDANCE", treat it as **high-priority expert instructions** that override ambiguity. This guidance describes the specific visual characteristics (shape, color, category) of the target objects. Use it to:
+- Know exactly **what** objects to look for in each grid cell before analyzing
+- Resolve any ambiguity in the challenge prompt
+- Filter out distractors explicitly mentioned in the guidance

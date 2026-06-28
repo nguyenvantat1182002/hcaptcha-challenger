@@ -27,3 +27,10 @@ Output Requirement:
 - Identify the source/start position (center of the draggable element).
 - Identify the target/end position (center of the correct destination).
 - Return precise x,y values (in the 0-1000 range).
+
+## SUPERVISOR GUIDANCE (if provided)
+
+If the user message contains a section titled "SUPERVISOR GUIDANCE", treat it as **high-priority expert instructions** that override ambiguity. This guidance describes the specific visual characteristics of BOTH the source object and the target destination. Use it to:
+- Know exactly **what** to drag and **where** to drop it before analyzing the image
+- Resolve any ambiguity in the challenge prompt
+- Focus on the described visual features (shape, color, outline, silhouette) to make the match

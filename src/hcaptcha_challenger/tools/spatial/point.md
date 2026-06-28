@@ -18,3 +18,10 @@
 3. Based on the 0–1000 normalized coordinate grid overlay, reasoning about the absolute position of the "answer object" in the coordinate system
 
 Finally, solve the challenge, locate the object, output the coordinates (in 0–1000 range) of the correct answer as json.
+
+## SUPERVISOR GUIDANCE (if provided)
+
+If the user message contains a section titled "SUPERVISOR GUIDANCE", treat it as **high-priority expert instructions** that override ambiguity. This guidance describes the specific visual characteristics (shape, color, category) of the target objects for the current challenge. Use it to:
+- Know exactly **what** objects to look for before analyzing the image
+- Resolve any ambiguity in the challenge prompt
+- Filter out distractors explicitly mentioned in the guidance
