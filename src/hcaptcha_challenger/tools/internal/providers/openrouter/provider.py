@@ -32,8 +32,12 @@ class OpenRouterProvider:
         self.model = model
         
         timeout_config = httpx.Timeout(timeout) if timeout is not None else httpx.USE_CLIENT_DEFAULT
+        # Bắt buộc thêm provider-sticky-routing để tận dụng Prompt Caching của OpenRouter.
         self.client = AsyncOpenAI(
-            api_key=api_key, base_url="https://openrouter.ai/api/v1", timeout=timeout_config
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1",
+            timeout=timeout_config,
+            default_headers={"provider-sticky-routing": "true"}
         )
 
     def _encode_image(self, image_path: Path) -> str:
