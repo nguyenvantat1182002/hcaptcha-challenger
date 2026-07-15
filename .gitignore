@@ -182,3 +182,5 @@ docs/assets/**/coordinate_grid*.png
 tests/show_answer/
 
 tmp/
+
+.openrouter_ratelimit

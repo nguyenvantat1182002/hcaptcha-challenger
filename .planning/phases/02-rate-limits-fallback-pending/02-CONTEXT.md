@@ -5,7 +5,7 @@ Rate Limits & Fallback — Cập nhật logic xử lý lỗi 429 và truyền c�
 
 ## Decisions
 - **Fallback Models Configuration**: Lấy danh sách fallback mặc định từ biến môi trường `OPENROUTER_FALLBACK_MODELS`. Cho phép ghi đè cấu hình này thông qua tham số hàm khi gọi API để tăng tính linh hoạt.
-- **Handling Rate Limits (429)**: Sử dụng trực tiếp API kiểm tra giới hạn (Rate Limits) của OpenRouter để tính toán chính xác thời gian được phép gọi tiếp theo, nhằm chủ động ngăn chặn lỗi 429 (hoặc dùng để xác định thời gian chờ chính xác) thay vì chỉ dựa vào Exponential Backoff tiêu chuẩn.
+- **Handling Rate Limits (429) & 70% Threshold (API Based)**: Theo yêu cầu của người dùng, bất chấp việc OpenRouter đánh dấu là deprecated, hệ thống **vẫn sẽ sử dụng API `GET /api/v1/auth/key`** để lấy thông tin Rate Limits. Logic được thiết kế như sau: Hệ thống sẽ phân tích cú pháp (parse) kết quả từ API này. Nếu xác định được mức độ sử dụng đạt **ngưỡng 70%**, hệ thống sẽ tính toán thời gian chờ, **lưu thời gian reset ra file tạm `.openrouter_ratelimit`**. Mọi tiến trình trước khi gửi request tới model đều sẽ đọc file này; nếu còn hiệu lực thì chủ động `sleep` để tránh 429.
 
 ## Canonical Refs
 - `.planning/ROADMAP.md`
