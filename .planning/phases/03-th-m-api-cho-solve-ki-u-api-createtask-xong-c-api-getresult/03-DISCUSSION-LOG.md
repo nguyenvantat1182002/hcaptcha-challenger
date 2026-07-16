@@ -49,6 +49,18 @@
 
 None.
 
+---
+
+## Loại bỏ API cũ (Deprecations)
+
+| Option | Description | Selected |
+|--------|-------------|----------|
+| Giữ lại API `/solve` | Cho phép gọi đồng bộ song song với bất đồng bộ | |
+| Loại bỏ API `/solve` | Chỉ cung cấp Async API (`/createTask`, `/getTaskResult`) | ✓ |
+
+**User's choice:** Loại bỏ API `/solve`.
+**Notes:** Xóa mã nguồn của API `/solve` cũ để bảo trì một kiến trúc duy nhất.
+
 ## Deferred Ideas
 
 None.

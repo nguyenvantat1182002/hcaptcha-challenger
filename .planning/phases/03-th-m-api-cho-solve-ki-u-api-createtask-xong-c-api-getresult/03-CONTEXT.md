@@ -22,6 +22,9 @@ Xây dựng cơ chế gọi API bất đồng bộ (Async API) với luồng 2 b
 ### Cơ chế dọn dẹp (Cleanup & TTL)
 - **D-03:** Hỗ trợ tính năng thiết lập timeout do người dùng định nghĩa. Việc dọn dẹp bộ nhớ (cleanup) dựa trên timeout này.
 
+### Loại bỏ API cũ (Deprecations)
+- **D-04:** Loại bỏ hoàn toàn API `/solve` đồng bộ cũ để chuyển hẳn sang kiến trúc Async API (`/createTask` & `/getTaskResult`).
+
 </decisions>
 
 <canonical_refs>
