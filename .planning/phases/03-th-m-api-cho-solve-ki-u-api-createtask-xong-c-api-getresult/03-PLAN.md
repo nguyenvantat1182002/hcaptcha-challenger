@@ -50,10 +50,12 @@ Sử dụng một background thread chạy một Event Loop riêng rẽ (`asynci
 **File:** `AGENT_SKILL.md`
 - Thay thế tài liệu cho `/solve` bằng hướng dẫn gọi 2 bước `/createTask` và liên tục poll `/getTaskResult`.
 - Cập nhật các đoạn code mẫu (Python và Node.js) để phản ánh logic gọi API mới.
+- **Review Update**: Đảm bảo các ví dụ code mẫu sử dụng vòng lặp `while` có giới hạn số lần thử tối đa (ví dụ: tối đa 60 lần / 60 giây) để tránh tình trạng Agent bị treo vĩnh viễn nếu task gặp sự cố bị kẹt.
 
 ### 6. Update Test Scripts
 **File:** `test_solve.py`
-- Sửa lại test script để gọi `/createTask` thay vì `/solve`, sau đó dùng vòng lặp `while` gọi `/getTaskResult` với `time.sleep(1)` để chờ kết quả.
+- Sửa lại test script để gọi `/createTask` thay vì `/solve`.
+- Dùng vòng lặp `while` gọi `/getTaskResult` với `time.sleep(1)` và tối đa 60 lần lặp để chờ kết quả.
 
 ## 4. Verification
 - Chạy Flask server cục bộ (`python -m hcaptcha_challenger.server.app`).
