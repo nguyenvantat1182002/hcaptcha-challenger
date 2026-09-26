@@ -84,6 +84,11 @@ class YesCaptchaClient:
             timeout=self.timeout,
         )
 
+    @property
+    def http_client(self) -> httpx.AsyncClient:
+        """The underlying httpx.AsyncClient instance."""
+        return self._client
+
     async def __aenter__(self) -> YesCaptchaClient:
         return self
 

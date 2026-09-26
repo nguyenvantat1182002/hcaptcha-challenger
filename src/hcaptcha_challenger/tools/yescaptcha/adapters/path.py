@@ -15,7 +15,7 @@ from hcaptcha_challenger.models import (
 )
 from hcaptcha_challenger.tools.yescaptcha.adapters.base import (
     calculate_viewport_transform,
-    encode_image_to_base64,
+    resolve_image_to_base64,
 )
 from hcaptcha_challenger.tools.yescaptcha.client import YesCaptchaClient
 
@@ -74,7 +74,9 @@ class YesCaptchaPathReasoner:
             q = "Please drag the puzzle piece to the target location."
 
         # 2. Queries
-        queries = [encode_image_to_base64(challenge_screenshot)]
+        queries = [
+            await resolve_image_to_base64(challenge_screenshot, http_client=self.client.http_client)
+        ]
 
         logger.debug(f"[YesCaptchaPathReasoner] Executing task with prompt='{q}'")
 

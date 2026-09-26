@@ -1,3 +1,4 @@
+import base64
 import json
 
 import httpx
@@ -12,25 +13,33 @@ from hcaptcha_challenger.tools.yescaptcha.client import YesCaptchaClient
 async def test_binary_reasoner_with_payload_urls(tmp_path):
     # Mock YesCaptcha API returning objects: [True, False, False, False, True, False, False, False, False]
     # Indices 0 -> [0, 0], 4 -> [1, 1]
-    def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path == "/createTask"
-        payload = json.loads(request.content)
-        assert payload["task"]["type"] == "HCaptchaClassification"
-        assert payload["task"]["question"] == "click the cat"
-        assert len(payload["task"]["queries"]) == 9
-        assert payload["task"]["queries"][0] == "https://example.com/img0.png"
-        assert payload["task"]["anchors"] == ["https://example.com/cat_anchor.png"]
+    dummy_img_bytes = b"fake_png_data"
+    expected_b64 = base64.b64encode(dummy_img_bytes).decode("utf-8")
 
-        return httpx.Response(
-            200,
-            json={
-                "errorId": 0,
-                "status": "ready",
-                "solution": {
-                    "objects": [True, False, False, False, True, False, False, False, False]
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and "example.com" in request.url.host:
+            return httpx.Response(200, content=dummy_img_bytes)
+
+        if request.url.path == "/createTask":
+            payload = json.loads(request.content)
+            assert payload["task"]["type"] == "HCaptchaClassification"
+            assert payload["task"]["question"] == "click the cat"
+            assert len(payload["task"]["queries"]) == 9
+            # Queries and anchors MUST be base64-encoded strings, not raw URLs
+            assert payload["task"]["queries"][0] == expected_b64
+            assert payload["task"]["anchors"] == [expected_b64]
+
+            return httpx.Response(
+                200,
+                json={
+                    "errorId": 0,
+                    "status": "ready",
+                    "solution": {
+                        "objects": [True, False, False, False, True, False, False, False, False]
+                    },
                 },
-            },
-        )
+            )
+        return httpx.Response(404)
 
     transport = httpx.MockTransport(handler)
     async with httpx.AsyncClient(transport=transport) as http_client:

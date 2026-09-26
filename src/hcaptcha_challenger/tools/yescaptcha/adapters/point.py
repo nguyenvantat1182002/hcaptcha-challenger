@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +15,7 @@ from hcaptcha_challenger.models import (
 )
 from hcaptcha_challenger.tools.yescaptcha.adapters.base import (
     calculate_viewport_transform,
-    encode_image_to_base64,
+    resolve_image_to_base64,
 )
 from hcaptcha_challenger.tools.yescaptcha.client import YesCaptchaClient
 
@@ -72,12 +73,18 @@ class YesCaptchaPointReasoner:
         else:
             q = "Please select the requested points or areas."
 
-        # 2. Queries and anchors
-        queries = [encode_image_to_base64(challenge_screenshot)]
+        # 2. Queries and anchors (resolve remote URLs / ChallengeImage to raw base64)
+        queries = [
+            await resolve_image_to_base64(challenge_screenshot, http_client=self.client.http_client)
+        ]
         anchors: list[str] | None = None
         if payload and payload.requester_question_example:
             ex = payload.requester_question_example
-            anchors = [str(x) for x in ex] if isinstance(ex, list) else [str(ex)]
+            raw_anchors = ex if isinstance(ex, list) else [ex]
+            anchors = await asyncio.gather(*[
+                resolve_image_to_base64(a, http_client=self.client.http_client)
+                for a in raw_anchors
+            ])
 
         logger.debug(f"[YesCaptchaPointReasoner] Executing task with prompt='{q}'")
 

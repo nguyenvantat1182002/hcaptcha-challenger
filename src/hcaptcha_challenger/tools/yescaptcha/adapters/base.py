@@ -5,6 +5,7 @@ import io
 from pathlib import Path
 from typing import Any
 
+import httpx
 from loguru import logger
 from PIL import Image
 from pydantic import BaseModel
@@ -22,19 +23,71 @@ class ViewportBoundingBox(BaseModel):
 
 
 def encode_image_to_base64(image: ChallengeImage | bytes | str | Path) -> str:
-    """Encode an image or ChallengeImage to a base64 UTF-8 string without disk I/O when possible."""
+    """Encode an image or ChallengeImage to a raw base64 UTF-8 string without disk I/O when possible."""
     if isinstance(image, ChallengeImage):
         return image.as_base64
     if isinstance(image, (bytes, bytearray)):
         return base64.b64encode(image).decode("utf-8")
-    if isinstance(image, str) and image.startswith(("http://", "https://", "data:")):
+    if isinstance(image, Path):
+        if not image.is_file():
+            raise FileNotFoundError(f"Image not found at path: {image}")
+        return base64.b64encode(image.read_bytes()).decode("utf-8")
+    if isinstance(image, str):
+        if image.startswith("data:"):
+            if "," in image:
+                return image.split(",", 1)[1]
+            return image
+        p = Path(image)
+        if p.is_file():
+            return base64.b64encode(p.read_bytes()).decode("utf-8")
         return image
 
-    path = Path(image)
-    if not path.is_file():
-        raise FileNotFoundError(f"Image not found at path: {path}")
-    raw_bytes = path.read_bytes()
-    return base64.b64encode(raw_bytes).decode("utf-8")
+    raise TypeError(f"Unsupported image type: {type(image)}")
+
+
+async def resolve_image_to_base64(
+    image: ChallengeImage | bytes | str | Path,
+    http_client: httpx.AsyncClient | None = None,
+) -> str:
+    """
+    Resolve an image source to a raw Base64 string for YesCaptcha API.
+    Handles ChallengeImage, raw bytes, local file paths, data URIs, and remote HTTP(S) URLs.
+    """
+    if isinstance(image, ChallengeImage):
+        return image.as_base64
+    if isinstance(image, (bytes, bytearray)):
+        return base64.b64encode(image).decode("utf-8")
+    if isinstance(image, Path):
+        if not image.is_file():
+            raise FileNotFoundError(f"Image not found at path: {image}")
+        return base64.b64encode(image.read_bytes()).decode("utf-8")
+    if isinstance(image, str):
+        # 1. Data URI prefix
+        if image.startswith("data:"):
+            if "," in image:
+                return image.split(",", 1)[1]
+            return image
+
+        # 2. Remote HTTP/HTTPS URL: fetch bytes asynchronously
+        if image.startswith(("http://", "https://")):
+            if http_client is not None:
+                resp = await http_client.get(image)
+                resp.raise_for_status()
+                return base64.b64encode(resp.content).decode("utf-8")
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(image)
+                resp.raise_for_status()
+                return base64.b64encode(resp.content).decode("utf-8")
+
+        # 3. Local file path string
+        p = Path(image)
+        if p.is_file():
+            return base64.b64encode(p.read_bytes()).decode("utf-8")
+
+        # 4. Already a raw base64 string
+        return image
+
+    raise TypeError(f"Unsupported image type for base64 encoding: {type(image)}")
 
 
 def calculate_viewport_transform(

@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +11,9 @@ from hcaptcha_challenger.models import (
     ChallengeImage,
     ImageBinaryChallenge,
 )
-from hcaptcha_challenger.tools.yescaptcha.adapters.base import encode_image_to_base64
+from hcaptcha_challenger.tools.yescaptcha.adapters.base import (
+    resolve_image_to_base64,
+)
 from hcaptcha_challenger.tools.yescaptcha.client import YesCaptchaClient
 
 
@@ -58,28 +59,34 @@ class YesCaptchaBinaryReasoner:
         else:
             q = "Please click each image containing the requested object."
 
-        # 2. Resolve queries
-        queries: list[str] = []
+        # 2. Resolve queries to raw Base64 strings (downloading URLs asynchronously if needed)
+        raw_queries: list[Any] = []
         if payload and payload.tasklist:
-            queries = [
+            raw_queries = [
                 task.datapoint_uri
                 for task in payload.tasklist
                 if task.datapoint_uri
             ]
 
-        if not queries:
+        if not raw_queries:
             if not challenge_screenshot:
                 raise ValueError("Neither payload with tasklist nor challenge_screenshot provided.")
-            queries = [encode_image_to_base64(challenge_screenshot)]
+            raw_queries = [challenge_screenshot]
 
-        # 3. Resolve anchors
+        queries = await asyncio.gather(*[
+            resolve_image_to_base64(q, http_client=self.client.http_client)
+            for q in raw_queries
+        ])
+
+        # 3. Resolve anchors to raw Base64 strings
         anchors: list[str] | None = None
         if payload and payload.requester_question_example:
             example = payload.requester_question_example
-            if isinstance(example, list):
-                anchors = [str(x) for x in example]
-            elif isinstance(example, str):
-                anchors = [example]
+            raw_anchors = example if isinstance(example, list) else [example]
+            anchors = await asyncio.gather(*[
+                resolve_image_to_base64(a, http_client=self.client.http_client)
+                for a in raw_anchors
+            ])
 
         logger.debug(f"[YesCaptchaBinaryReasoner] Executing task with question='{q}', {len(queries)} queries")
 
