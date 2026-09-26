@@ -529,10 +529,11 @@ class CoordinateGrid(BaseModel):
 
 
 import base64
-import io
 from functools import cached_property
+import io
 from pathlib import Path
-from PIL import Image
+
+from PIL import Image, UnidentifiedImageError
 
 
 class ChallengeImage:
@@ -595,5 +596,9 @@ class ChallengeImage:
         return p
 
     def __repr__(self) -> str:
-        return f"<ChallengeImage size={len(self._raw_bytes)}B dimensions={self.dimensions}>"
+        try:
+            dims = self.dimensions
+            return f"<ChallengeImage size={len(self._raw_bytes)}B dimensions={dims}>"
+        except (UnidentifiedImageError, OSError, ValueError):
+            return f"<ChallengeImage size={len(self._raw_bytes)}B dimensions=unknown>"
 

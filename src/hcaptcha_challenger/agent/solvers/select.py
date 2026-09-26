@@ -69,28 +69,39 @@ class AreaSelectSolver(ChallengeSolver):
                 self.config.WAIT_FOR_CHALLENGE_VIEW_TO_RENDER_MS
             )
 
-            raw, projection = await self.driver.capture_spatial_mapping(
-                ctx.frame, ctx.cache_key, cid
-            )
+            # Capture challenge image directly in-memory alongside bounding box
+            challenge_image, bbox = await self.driver.capture_challenge_image(ctx.frame)
 
-            challenge_view = ctx.frame.locator("//div[@class='challenge-view']")
-            bbox = None
-            with suppress(Exception):
-                bbox = await challenge_view.bounding_box()
+            # Generate coordinate grid projection only if active reasoner requires it (Gemini)
+            projection = None
+            if getattr(self._spatial_point_reasoner, "requires_grid_projection", False):
+                projection = self.driver.create_spatial_projection(
+                    challenge_image=challenge_image,
+                    bbox=bbox,
+                    cache_key=ctx.cache_key,
+                    crumb_id=cid,
+                )
+
+            # Save diagnostic screenshot only when debug mode is explicitly enabled
+            if self.config.enable_challenger_debug:
+                raw_path = ctx.cache_key.joinpath(f"{ctx.cache_key.name}_{cid}_challenge_view.png")
+                challenge_image.save(raw_path)
 
             user_prompt = self._match_user_prompt(ctx.payload, ctx.job_type)
 
             response = await self._spatial_point_reasoner(
-                challenge_screenshot=raw,
+                challenge_screenshot=challenge_image,
                 grid_divisions=projection,
                 auxiliary_information=user_prompt,
                 payload=ctx.payload,
                 bbox=bbox,
             )
             logger.debug(f"[{cid + 1}/{ctx.crumb_count}]ToolInvokeMessage: {response.log_message}")
-            self._spatial_point_reasoner.cache_response(
-                path=ctx.cache_key.joinpath(f"{ctx.cache_key.name}_{cid}_model_answer.json")
-            )
+
+            if self.config.enable_challenger_debug:
+                self._spatial_point_reasoner.cache_response(
+                    path=ctx.cache_key.joinpath(f"{ctx.cache_key.name}_{cid}_model_answer.json")
+                )
 
             for point in response.points:
                 await self.pointer.click_at(point.x, point.y, delay=180)
