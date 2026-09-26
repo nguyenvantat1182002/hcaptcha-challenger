@@ -526,3 +526,74 @@ class CoordinateGrid(BaseModel):
     adaptive_contrast: bool | None = Field(
         default=False, description="Visual assist effects for enhancing high-contrast scenes"
     )
+
+
+import base64
+import io
+from functools import cached_property
+from pathlib import Path
+from PIL import Image
+
+
+class ChallengeImage:
+    """
+    Immutable in-memory visual value object encapsulating challenge screenshot bytes,
+    lazy base64 encoding, dimensions, and optional disk persistence.
+    """
+
+    def __init__(self, raw_bytes: bytes) -> None:
+        if not isinstance(raw_bytes, (bytes, bytearray)):
+            raise TypeError(f"raw_bytes must be bytes or bytearray, got {type(raw_bytes)}")
+        self._raw_bytes = bytes(raw_bytes)
+
+    @property
+    def raw_bytes(self) -> bytes:
+        return self._raw_bytes
+
+    @cached_property
+    def as_base64(self) -> str:
+        """Lazy cached base64 encoded UTF-8 string."""
+        return base64.b64encode(self._raw_bytes).decode("utf-8")
+
+    @cached_property
+    def dimensions(self) -> tuple[int, int]:
+        """Lazy cached (width, height) in pixels computed from in-memory stream."""
+        with Image.open(io.BytesIO(self._raw_bytes)) as img:
+            return img.size
+
+    @property
+    def width(self) -> int:
+        return self.dimensions[0]
+
+    @property
+    def height(self) -> int:
+        return self.dimensions[1]
+
+    @classmethod
+    def from_bytes(cls, data: bytes) -> ChallengeImage:
+        return cls(raw_bytes=data)
+
+    @classmethod
+    def from_file(cls, path: str | Path) -> ChallengeImage:
+        p = Path(path)
+        if not p.is_file():
+            raise FileNotFoundError(f"Image file not found: {p}")
+        return cls(raw_bytes=p.read_bytes())
+
+    @classmethod
+    def from_base64(cls, b64_str: str) -> ChallengeImage:
+        if "," in b64_str and b64_str.startswith("data:"):
+            b64_str = b64_str.split(",", 1)[1]
+        data = base64.b64decode(b64_str)
+        return cls(raw_bytes=data)
+
+    def save(self, path: str | Path) -> Path:
+        """Persist in-memory bytes to disk for debugging/caching."""
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(self._raw_bytes)
+        return p
+
+    def __repr__(self) -> str:
+        return f"<ChallengeImage size={len(self._raw_bytes)}B dimensions={self.dimensions}>"
+

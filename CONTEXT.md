@@ -39,3 +39,7 @@ _Avoid_: YesCaptchaService, YesCaptchaHelper, CaptchaApi
 **YesCaptchaReasoner**:
 An adapter module conforming to the reasoner seam that translates challenge inputs into YesCaptcha tasks and maps solutions to repository domain models.
 _Avoid_: YesCaptchaHandler, YesCaptchaPlugin, YesCaptchaResolver
+
+**ChallengeImage**:
+An immutable in-memory visual value object encapsulating challenge screenshot bytes, lazy base64 encoding, dimensions, and optional disk persistence.
+_Avoid_: Screenshot, ImageWrapper, ImageHelper, RawImage
