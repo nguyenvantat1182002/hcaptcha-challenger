@@ -6,6 +6,7 @@ Deep asynchronous YesCaptcha API client.
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 import httpx
 from loguru import logger
@@ -22,7 +23,6 @@ DEFAULT_HEADERS = {
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": '"Windows"',
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
-    "accept-encoding": "gzip, deflate, br, zstd",
     "accept-language": "en-US,en;q=0.9,vi;q=0.8",
 }
 
@@ -110,7 +110,7 @@ class YesCaptchaClient:
             response = await self._client.post(url, json=payload)
             response.raise_for_status()
             data = response.json()
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError) as e:
             raise YesCaptchaError(f"HTTP request to {url} failed: {e}") from e
 
         self._check_api_error(data)
@@ -130,7 +130,7 @@ class YesCaptchaClient:
             response = await self._client.post(url, json=payload)
             response.raise_for_status()
             data = response.json()
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError) as e:
             raise YesCaptchaError(f"HTTP request to {url} failed: {e}") from e
 
         self._check_api_error(data)
@@ -216,7 +216,7 @@ class YesCaptchaClient:
             response = await self._client.post(url, json=payload)
             response.raise_for_status()
             data = response.json()
-        except httpx.HTTPError as e:
+        except (httpx.HTTPError, json.JSONDecodeError, UnicodeDecodeError) as e:
             raise YesCaptchaError(f"HTTP request to {url} failed: {e}") from e
 
         self._check_api_error(data)

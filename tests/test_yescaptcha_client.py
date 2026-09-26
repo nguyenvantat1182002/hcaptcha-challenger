@@ -161,3 +161,13 @@ async def test_client_report():
         res = await client.report(task_id=999, is_correct=True)
 
     assert res["status"] == "success"
+
+
+def test_client_default_headers_omit_manual_accept_encoding():
+    from hcaptcha_challenger.tools.yescaptcha.client import DEFAULT_HEADERS
+
+    # Ensuring accept-encoding is not manually overridden, so httpx handles decompression
+    assert "accept-encoding" not in DEFAULT_HEADERS
+    client = YesCaptchaClient(client_key="test_key")
+    assert "accept-encoding" not in client._client.headers or client._client.headers["accept-encoding"] == "gzip, deflate"
+

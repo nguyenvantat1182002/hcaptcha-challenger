@@ -10,7 +10,7 @@ def test_agent_config_default_provider_requires_gemini_key(monkeypatch):
     monkeypatch.delenv("YESCAPTCHA_CLIENT_KEY", raising=False)
 
     with pytest.raises(ValidationError) as exc_info:
-        AgentConfig(GEMINI_API_KEY="")
+        AgentConfig(_env_file=None, REASONING_PROVIDER="gemini", GEMINI_API_KEY="")
     assert "GEMINI_API_KEY is required" in str(exc_info.value)
 
 
@@ -19,13 +19,14 @@ def test_agent_config_yescaptcha_provider_requires_yescaptcha_key(monkeypatch):
     monkeypatch.delenv("YESCAPTCHA_CLIENT_KEY", raising=False)
 
     with pytest.raises(ValidationError) as exc_info:
-        AgentConfig(REASONING_PROVIDER="yescaptcha", YESCAPTCHA_CLIENT_KEY="")
+        AgentConfig(_env_file=None, REASONING_PROVIDER="yescaptcha", YESCAPTCHA_CLIENT_KEY="")
     assert "YESCAPTCHA_CLIENT_KEY is required" in str(exc_info.value)
 
 
 def test_agent_config_yescaptcha_valid(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     config = AgentConfig(
+        _env_file=None,
         REASONING_PROVIDER="yescaptcha",
         YESCAPTCHA_CLIENT_KEY="test_yescaptcha_key_12345",
     )
@@ -38,4 +39,4 @@ def test_agent_config_yescaptcha_valid(monkeypatch):
 
 def test_agent_config_invalid_provider():
     with pytest.raises(ValidationError):
-        AgentConfig(REASONING_PROVIDER="invalid_provider")
+        AgentConfig(_env_file=None, REASONING_PROVIDER="invalid_provider")
