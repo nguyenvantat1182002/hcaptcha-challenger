@@ -3,7 +3,7 @@ from __future__ import annotations
 from hcaptcha_challenger.tools.yescaptcha.adapters.base import (
     ViewportBoundingBox,
     calculate_viewport_transform,
-    encode_image_to_base64,
+    resolve_image_to_base64,
 )
 from hcaptcha_challenger.tools.yescaptcha.adapters.binary import (
     YesCaptchaBinaryReasoner,
@@ -31,5 +31,5 @@ __all__ = [
     "YesCaptchaPointReasoner",
     "YesCaptchaPointSolution",
     "calculate_viewport_transform",
-    "encode_image_to_base64",
+    "resolve_image_to_base64",
 ]

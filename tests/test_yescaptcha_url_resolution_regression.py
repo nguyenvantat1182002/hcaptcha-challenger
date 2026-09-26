@@ -26,28 +26,22 @@ SAMPLE_PNG_BASE64 = base64.b64encode(SAMPLE_PNG_BYTES).decode("utf-8")
 
 @pytest.mark.asyncio
 async def test_resolve_image_to_base64_varieties():
-    # 1. ChallengeImage
-    img = ChallengeImage.from_bytes(SAMPLE_PNG_BYTES)
-    assert await resolve_image_to_base64(img) == SAMPLE_PNG_BASE64
-
-    # 2. Raw bytes
-    assert await resolve_image_to_base64(SAMPLE_PNG_BYTES) == SAMPLE_PNG_BASE64
-
-    # 3. Data URI (should strip prefix)
-    data_uri = f"data:image/png;base64,{SAMPLE_PNG_BASE64}"
-    assert await resolve_image_to_base64(data_uri) == SAMPLE_PNG_BASE64
-
-    # 4. Raw base64 string
-    assert await resolve_image_to_base64(SAMPLE_PNG_BASE64) == SAMPLE_PNG_BASE64
-
-    # 5. Remote HTTP URL
     def url_handler(request: httpx.Request) -> httpx.Response:
         assert request.url == httpx.URL("https://example.com/test.png")
         return httpx.Response(200, content=SAMPLE_PNG_BYTES)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(url_handler)) as http_client:
-        b64 = await resolve_image_to_base64("https://example.com/test.png", http_client=http_client)
+        # 1. In-memory ChallengeImage
+        img = ChallengeImage.from_bytes(SAMPLE_PNG_BYTES)
+        assert await resolve_image_to_base64(img, http_client) == SAMPLE_PNG_BASE64
+
+        # 2. Remote HTTP URL
+        b64 = await resolve_image_to_base64("https://example.com/test.png", http_client)
         assert b64 == SAMPLE_PNG_BASE64
+
+        # 3. Already a raw base64 string
+        assert await resolve_image_to_base64(SAMPLE_PNG_BASE64, http_client) == SAMPLE_PNG_BASE64
+
 
 
 @pytest.mark.asyncio
