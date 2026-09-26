@@ -122,3 +122,81 @@ def test_area_select_and_drag_drop_solvers_use_yescaptcha_reasoner():
     drag_solver = DragDropSolver(config=config, driver=mock_driver, pointer=mock_pointer)
     assert isinstance(drag_solver._spatial_path_reasoner, YesCaptchaPathReasoner)
 
+
+@pytest.mark.asyncio
+async def test_yescaptcha_point_reasoner_with_bbox(tmp_path):
+    from PIL import Image
+
+    img_path = tmp_path / "area_real.png"
+    Image.new("RGB", (500, 400), color="blue").save(img_path)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "errorId": 0,
+                "status": "ready",
+                "solution": {
+                    "clicks": [
+                        {"x": 50, "y": 60},
+                    ]
+                },
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = YesCaptchaClient(client_key="test_key", client=http_client)
+        reasoner = YesCaptchaPointReasoner(client=client)
+
+        # bbox: x=100, y=200, width=1000 (scale 2.0), height=800 (scale 2.0)
+        bbox = {"x": 100, "y": 200, "width": 1000, "height": 800}
+        response = await reasoner(
+            challenge_screenshot=img_path,
+            auxiliary_information="find the item",
+            bbox=bbox,
+        )
+
+    assert len(response.points) == 1
+    # 100 + 50 * 2 = 200, 200 + 60 * 2 = 320
+    assert response.points[0] == PointCoordinate(x=200, y=320)
+
+
+@pytest.mark.asyncio
+async def test_yescaptcha_path_reasoner_with_bbox(tmp_path):
+    from PIL import Image
+
+    img_path = tmp_path / "drag_real.png"
+    Image.new("RGB", (500, 400), color="green").save(img_path)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "errorId": 0,
+                "status": "ready",
+                "solution": {
+                    "box": [
+                        {"start": [50, 60], "end": [100, 120]},
+                    ]
+                },
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = YesCaptchaClient(client_key="test_key", client=http_client)
+        reasoner = YesCaptchaPathReasoner(client=client)
+
+        bbox = {"x": 100, "y": 200, "width": 1000, "height": 800}
+        response = await reasoner(
+            challenge_screenshot=img_path,
+            auxiliary_information="drag the item",
+            bbox=bbox,
+        )
+
+    assert len(response.paths) == 1
+    assert response.paths[0].start_point == PointCoordinate(x=200, y=320)
+    assert response.paths[0].end_point == PointCoordinate(x=300, y=440)
+
+

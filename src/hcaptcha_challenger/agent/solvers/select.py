@@ -10,7 +10,10 @@ from hcaptcha_challenger.agent.solvers.base import ChallengeContext, ChallengeSo
 from hcaptcha_challenger.models import CaptchaPayload, ChallengeTypeEnum, RequestType
 from hcaptcha_challenger.skills import SkillManager
 from hcaptcha_challenger.tools import SpatialPointReasoner
-from hcaptcha_challenger.tools.yescaptcha import YesCaptchaClient, YesCaptchaPointReasoner
+from hcaptcha_challenger.tools.yescaptcha import (
+    YesCaptchaClient,
+    YesCaptchaPointReasoner,
+)
 
 
 class AreaSelectSolver(ChallengeSolver):
@@ -70,6 +73,11 @@ class AreaSelectSolver(ChallengeSolver):
                 ctx.frame, ctx.cache_key, cid
             )
 
+            challenge_view = ctx.frame.locator("//div[@class='challenge-view']")
+            bbox = None
+            with suppress(Exception):
+                bbox = await challenge_view.bounding_box()
+
             user_prompt = self._match_user_prompt(ctx.payload, ctx.job_type)
 
             response = await self._spatial_point_reasoner(
@@ -77,6 +85,7 @@ class AreaSelectSolver(ChallengeSolver):
                 grid_divisions=projection,
                 auxiliary_information=user_prompt,
                 payload=ctx.payload,
+                bbox=bbox,
             )
             logger.debug(f"[{cid + 1}/{ctx.crumb_count}]ToolInvokeMessage: {response.log_message}")
             self._spatial_point_reasoner.cache_response(

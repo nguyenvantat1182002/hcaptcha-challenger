@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 Deep asynchronous YesCaptcha API client.
 """
@@ -11,6 +10,7 @@ import json
 import time
 from pathlib import Path
 from typing import Any
+
 import httpx
 from loguru import logger
 from pydantic import SecretStr
@@ -36,7 +36,7 @@ def _dump_image_item(item: str, save_path: Path) -> None:
         if not isinstance(item, (str, bytes)):
             return
         # If it's a URL
-        if isinstance(item, str) and (item.startswith("http://") or item.startswith("https://")):
+        if isinstance(item, str) and item.startswith(("http://", "https://")):
             txt_path = save_path.with_suffix(".url.txt")
             txt_path.parent.mkdir(parents=True, exist_ok=True)
             txt_path.write_text(item, encoding="utf-8")

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 YesCaptcha integration package.
 """
@@ -16,11 +15,11 @@ from hcaptcha_challenger.tools.yescaptcha.exceptions import (
 )
 
 __all__ = [
-    "YesCaptchaClient",
     "YesCaptchaBinaryReasoner",
-    "YesCaptchaPointReasoner",
-    "YesCaptchaPathReasoner",
+    "YesCaptchaClient",
     "YesCaptchaError",
+    "YesCaptchaPathReasoner",
+    "YesCaptchaPointReasoner",
     "YesCaptchaTaskError",
     "YesCaptchaTimeoutError",
 ]

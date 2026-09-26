@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
 YesCaptcha reasoner adapters conforming to the Reasoner Seam.
 """
@@ -6,7 +5,6 @@ YesCaptcha reasoner adapters conforming to the Reasoner Seam.
 from __future__ import annotations
 
 import base64
-import json
 from pathlib import Path
 from typing import Any
 
@@ -167,9 +165,34 @@ class YesCaptchaPointReasoner:
             anchors=anchors,
         )
 
+        # Resolve bbox for coordinate translation from image-local to viewport
+        bbox = kwargs.get("bbox")
+        offset_x = 0.0
+        offset_y = 0.0
+        scale_x = 1.0
+        scale_y = 1.0
+
+        if bbox and isinstance(bbox, dict) and "x" in bbox and "y" in bbox:
+            offset_x = float(bbox["x"])
+            offset_y = float(bbox["y"])
+            if "width" in bbox and "height" in bbox:
+                try:
+                    from PIL import Image
+
+                    with Image.open(challenge_screenshot) as img:
+                        img_w, img_h = img.size
+                        if img_w > 0 and img_h > 0:
+                            scale_x = float(bbox["width"]) / img_w
+                            scale_y = float(bbox["height"]) / img_h
+                except Exception as e:
+                    logger.debug(f"Image dimension check skipped for scaling: {e}")
+
         clicks = solution.get("clicks", [])
         points = [
-            PointCoordinate(x=int(c["x"]), y=int(c["y"]))
+            PointCoordinate(
+                x=int(offset_x + float(c["x"]) * scale_x),
+                y=int(offset_y + float(c["y"]) * scale_y),
+            )
             for c in clicks
             if "x" in c and "y" in c
         ]
@@ -228,6 +251,28 @@ class YesCaptchaPathReasoner:
             queries=queries,
         )
 
+        # Resolve bbox for coordinate translation from image-local to viewport
+        bbox = kwargs.get("bbox")
+        offset_x = 0.0
+        offset_y = 0.0
+        scale_x = 1.0
+        scale_y = 1.0
+
+        if bbox and isinstance(bbox, dict) and "x" in bbox and "y" in bbox:
+            offset_x = float(bbox["x"])
+            offset_y = float(bbox["y"])
+            if "width" in bbox and "height" in bbox:
+                try:
+                    from PIL import Image
+
+                    with Image.open(challenge_screenshot) as img:
+                        img_w, img_h = img.size
+                        if img_w > 0 and img_h > 0:
+                            scale_x = float(bbox["width"]) / img_w
+                            scale_y = float(bbox["height"]) / img_h
+                except Exception as e:
+                    logger.debug(f"Image dimension check skipped for scaling: {e}")
+
         boxes = solution.get("box", [])
         paths: list[SpatialPath] = []
         for box in boxes:
@@ -235,8 +280,14 @@ class YesCaptchaPathReasoner:
             end = box.get("end", [0, 0])
             paths.append(
                 SpatialPath(
-                    start_point=PointCoordinate(x=int(start[0]), y=int(start[1])),
-                    end_point=PointCoordinate(x=int(end[0]), y=int(end[1])),
+                    start_point=PointCoordinate(
+                        x=int(offset_x + float(start[0]) * scale_x),
+                        y=int(offset_y + float(start[1]) * scale_y),
+                    ),
+                    end_point=PointCoordinate(
+                        x=int(offset_x + float(end[0]) * scale_x),
+                        y=int(offset_y + float(end[1]) * scale_y),
+                    ),
                 )
             )
 
