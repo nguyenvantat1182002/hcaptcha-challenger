@@ -18,7 +18,7 @@ async def challenge(page: Page) -> AgentV:
 
     # In your real-world workflow, you may need to replace the `click_checkbox()`
     # It may be to click the Login button or the Submit button to a trigger challenge
-    await agent.robotic_arm.click_checkbox()
+    # await agent.robotic_arm.click_checkbox()
 
     # Wait for the challenge to appear and be ready for solving
     await agent.wait_for_challenge()
@@ -32,11 +32,11 @@ async def main():
         persistent_context=True,
         user_data_dir="tmp/.cache/camoufox",
         screen=Screen(max_width=1920, max_height=1080),
-        humanize=0.2,  # humanize=True,
+        humanize=0.6,  # humanize=True,
     ) as browser:
         page = browser.pages[-1] if browser.pages else await browser.new_page()
 
-        await page.goto(SiteKey.as_site_link(SiteKey.discord))
+        await page.goto('https://account.riotgames.com/')
 
         # --- When you encounter hCaptcha in your workflow ---
         agent: AgentV = await challenge(page)

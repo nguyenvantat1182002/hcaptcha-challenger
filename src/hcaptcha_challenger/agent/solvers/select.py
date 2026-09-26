@@ -10,6 +10,7 @@ from hcaptcha_challenger.agent.solvers.base import ChallengeContext, ChallengeSo
 from hcaptcha_challenger.models import CaptchaPayload, ChallengeTypeEnum, RequestType
 from hcaptcha_challenger.skills import SkillManager
 from hcaptcha_challenger.tools import SpatialPointReasoner
+from hcaptcha_challenger.tools.yescaptcha import YesCaptchaClient, YesCaptchaPointReasoner
 
 
 class AreaSelectSolver(ChallengeSolver):
@@ -27,10 +28,14 @@ class AreaSelectSolver(ChallengeSolver):
         self.driver = driver
         self.pointer = pointer
 
-        self._spatial_point_reasoner = SpatialPointReasoner(
-            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
-            model=self.config.SPATIAL_POINT_REASONER_MODEL,
-        )
+        if self.config.REASONING_PROVIDER == "yescaptcha":
+            client = YesCaptchaClient(client_key=self.config.YESCAPTCHA_CLIENT_KEY)
+            self._spatial_point_reasoner = YesCaptchaPointReasoner(client=client)
+        else:
+            self._spatial_point_reasoner = SpatialPointReasoner(
+                gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
+                model=self.config.SPATIAL_POINT_REASONER_MODEL,
+            )
         self._skill_manager = SkillManager(agent_config=config)
 
     def _match_user_prompt(
@@ -68,6 +73,7 @@ class AreaSelectSolver(ChallengeSolver):
                 challenge_screenshot=raw,
                 grid_divisions=projection,
                 auxiliary_information=user_prompt,
+                payload=ctx.payload,
             )
             logger.debug(f"[{cid + 1}/{ctx.crumb_count}]ToolInvokeMessage: {response.log_message}")
             self._spatial_point_reasoner.cache_response(

@@ -2,10 +2,10 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, Self
 
 from loguru import logger
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from hcaptcha_challenger.models import (
@@ -31,6 +31,14 @@ class AgentConfig(BaseSettings):
     GEMINI_API_KEY: SecretStr = Field(
         default_factory=lambda: SecretStr(os.environ.get("GEMINI_API_KEY", "")),
         description="Create API Key https://aistudio.google.com/app/apikey",
+    )
+    YESCAPTCHA_CLIENT_KEY: SecretStr = Field(
+        default_factory=lambda: SecretStr(os.environ.get("YESCAPTCHA_CLIENT_KEY", "")),
+        description="YesCaptcha Client Key (from https://yescaptcha.com)",
+    )
+    REASONING_PROVIDER: Literal["gemini", "yescaptcha"] = Field(
+        default="gemini",
+        description="Reasoning provider for challenge solving: 'gemini' (multimodal) or 'yescaptcha' (remote API)",
     )
 
     cache_dir: Path = Path("tmp/.cache")
@@ -111,28 +119,26 @@ class AgentConfig(BaseSettings):
     )
     skills_update_branch: str = Field(default="main", description="GitHub branch for skills update")
 
-    @field_validator("GEMINI_API_KEY", mode="before")
-    @classmethod
-    def validate_api_key(cls, v: Any) -> str:
+    @model_validator(mode="after")
+    def validate_provider_keys(self) -> Self:
         """
-        Validates that the GEMINI_API_KEY is not empty.
-
-        Args:
-            v: The API key value to validate
-
-        Returns:
-            The validated API key
-
-        Raises:
-            ValueError: If the API key is empty
+        Validates that the active reasoning provider has its required credentials.
         """
-        if not v or not isinstance(v, str):
-            raise ValueError(
-                "GEMINI_API_KEY is required but not provided. "
-                "Please either pass it directly or set the GEMINI_API_KEY environment variable."
-                "Create API Key -> https://aistudio.google.com/app/apikey"
-            )
-        return v
+        if self.REASONING_PROVIDER == "gemini":
+            if not self.GEMINI_API_KEY.get_secret_value():
+                raise ValueError(
+                    "GEMINI_API_KEY is required when REASONING_PROVIDER is 'gemini'. "
+                    "Please either pass it directly or set the GEMINI_API_KEY environment variable. "
+                    "Create API Key -> https://aistudio.google.com/app/apikey"
+                )
+        elif self.REASONING_PROVIDER == "yescaptcha":
+            if not self.YESCAPTCHA_CLIENT_KEY.get_secret_value():
+                raise ValueError(
+                    "YESCAPTCHA_CLIENT_KEY is required when REASONING_PROVIDER is 'yescaptcha'. "
+                    "Please either pass it directly or set the YESCAPTCHA_CLIENT_KEY environment variable. "
+                    "Get Client Key -> https://yescaptcha.com"
+                )
+        return self
 
     @property
     def spatial_grid_cache(self):

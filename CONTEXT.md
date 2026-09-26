@@ -31,3 +31,11 @@ _Avoid_: MouseHelper, Cursor, Tracker, MotionController
 **AgentConfig**:
 A declarative settings model defining timeouts, model selections, storage paths, and challenge filter rules.
 _Avoid_: Settings, Options, Env, Parameters
+
+**YesCaptchaClient**:
+A deep asynchronous client module encapsulating HTTP communication, task creation, polling, and serialization with the YesCaptcha API.
+_Avoid_: YesCaptchaService, YesCaptchaHelper, CaptchaApi
+
+**YesCaptchaReasoner**:
+An adapter module conforming to the reasoner seam that translates challenge inputs into YesCaptcha tasks and maps solutions to repository domain models.
+_Avoid_: YesCaptchaHandler, YesCaptchaPlugin, YesCaptchaResolver

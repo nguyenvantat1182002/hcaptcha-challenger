@@ -8,6 +8,7 @@ from hcaptcha_challenger.agent.driver import BrowserArm
 from hcaptcha_challenger.agent.pointer import HumanoidPointer
 from hcaptcha_challenger.agent.solvers.base import ChallengeContext, ChallengeSolver
 from hcaptcha_challenger.tools import ImageClassifier
+from hcaptcha_challenger.tools.yescaptcha import YesCaptchaBinaryReasoner, YesCaptchaClient
 
 
 class BinaryLabelSolver(ChallengeSolver):
@@ -25,10 +26,14 @@ class BinaryLabelSolver(ChallengeSolver):
         self.driver = driver
         self.pointer = pointer
 
-        self._image_classifier = ImageClassifier(
-            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
-            model=self.config.IMAGE_CLASSIFIER_MODEL,
-        )
+        if self.config.REASONING_PROVIDER == "yescaptcha":
+            client = YesCaptchaClient(client_key=self.config.YESCAPTCHA_CLIENT_KEY)
+            self._image_classifier = YesCaptchaBinaryReasoner(client=client)
+        else:
+            self._image_classifier = ImageClassifier(
+                gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
+                model=self.config.IMAGE_CLASSIFIER_MODEL,
+            )
 
     async def solve(self, ctx: ChallengeContext) -> None:
         for cid in range(ctx.crumb_count):
@@ -42,7 +47,10 @@ class BinaryLabelSolver(ChallengeSolver):
             await challenge_view.screenshot(type="png", path=challenge_screenshot)
 
             # Image classification
-            response = await self._image_classifier(challenge_screenshot=challenge_screenshot)
+            response = await self._image_classifier(
+                challenge_screenshot=challenge_screenshot,
+                payload=ctx.payload,
+            )
             boolean_matrix = response.convert_box_to_boolean_matrix()
 
             logger.debug(f"[{cid + 1}/{ctx.crumb_count}]ToolInvokeMessage: {response.log_message}")
