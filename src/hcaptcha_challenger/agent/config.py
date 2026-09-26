@@ -40,6 +40,10 @@ class AgentConfig(BaseSettings):
         default="gemini",
         description="Reasoning provider for challenge solving: 'gemini' (multimodal) or 'yescaptcha' (remote API)",
     )
+    YESCAPTCHA_DUMP_DIR: Path | None = Field(
+        default=Path("tmp/.yescaptcha_dumps"),
+        description="Local directory to dump YesCaptcha request images for debugging",
+    )
 
     cache_dir: Path = Path("tmp/.cache")
     challenge_dir: Path = Path("tmp/.challenge")

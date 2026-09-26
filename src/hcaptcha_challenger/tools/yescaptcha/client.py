@@ -6,7 +6,10 @@ Deep asynchronous YesCaptcha API client.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
+import time
+from pathlib import Path
 from typing import Any
 import httpx
 from loguru import logger
@@ -27,6 +30,28 @@ DEFAULT_HEADERS = {
 }
 
 
+def _dump_image_item(item: str, save_path: Path) -> None:
+    """Save an image query or anchor item to disk (supports base64 and URL)."""
+    try:
+        if not isinstance(item, (str, bytes)):
+            return
+        # If it's a URL
+        if isinstance(item, str) and (item.startswith("http://") or item.startswith("https://")):
+            txt_path = save_path.with_suffix(".url.txt")
+            txt_path.parent.mkdir(parents=True, exist_ok=True)
+            txt_path.write_text(item, encoding="utf-8")
+        else:
+            # Assume base64 string
+            raw_str = item if isinstance(item, str) else item.decode("ascii")
+            if "," in raw_str:
+                raw_str = raw_str.split(",", 1)[1]
+            raw_bytes = base64.b64decode(raw_str)
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            save_path.write_bytes(raw_bytes)
+    except Exception as e:
+        logger.warning(f"Failed to dump debug image to {save_path}: {e}")
+
+
 class YesCaptchaClient:
     """
     Asynchronous client for interacting with https://api.yescaptcha.com.
@@ -43,6 +68,7 @@ class YesCaptchaClient:
         poll_interval: float = 1.0,
         max_poll_attempts: int = 30,
         client: httpx.AsyncClient | None = None,
+        dump_dir: Path | str | None = Path("tmp/.yescaptcha_dumps"),
     ):
         self._client_key = (
             client_key.get_secret_value() if isinstance(client_key, SecretStr) else client_key
@@ -51,6 +77,7 @@ class YesCaptchaClient:
         self.timeout = timeout
         self.poll_interval = poll_interval
         self.max_poll_attempts = max_poll_attempts
+        self.dump_dir = Path(dump_dir) if dump_dir else None
         self._external_client = client is not None
         self._client = client or httpx.AsyncClient(
             headers=DEFAULT_HEADERS,
@@ -91,6 +118,27 @@ class YesCaptchaClient:
         """
         Creates a new solving task on YesCaptcha.
         """
+        # Dump images to disk if dump_dir is configured
+        if self.dump_dir:
+            try:
+                task_folder = self.dump_dir.joinpath(f"{task_type}_{int(time.time() * 1000)}")
+                task_folder.mkdir(parents=True, exist_ok=True)
+
+                task_folder.joinpath("question.txt").write_text(
+                    f"Type: {task_type}\nQuestion: {question}\n", encoding="utf-8"
+                )
+
+                query_list = queries if isinstance(queries, list) else [queries]
+                for idx, q_item in enumerate(query_list):
+                    _dump_image_item(q_item, task_folder.joinpath(f"query_{idx}.png"))
+
+                if anchors:
+                    anchor_list = anchors if isinstance(anchors, list) else [anchors]
+                    for idx, a_item in enumerate(anchor_list):
+                        _dump_image_item(a_item, task_folder.joinpath(f"anchor_{idx}.png"))
+            except Exception as e:
+                logger.warning(f"Error while dumping YesCaptcha task images: {e}")
+
         task_payload: dict[str, Any] = {
             "type": task_type,
             "question": question,

@@ -171,3 +171,46 @@ def test_client_default_headers_omit_manual_accept_encoding():
     client = YesCaptchaClient(client_key="test_key")
     assert "accept-encoding" not in client._client.headers or client._client.headers["accept-encoding"] == "gzip, deflate"
 
+
+@pytest.mark.asyncio
+async def test_client_dump_images(tmp_path):
+    import base64
+
+    # 1x1 transparent PNG base64
+    sample_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"errorId": 0, "status": "ready", "solution": {"objects": [True]}},
+        )
+
+    dump_dir = tmp_path / "yescaptcha_dumps"
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = YesCaptchaClient(
+            client_key="test_key",
+            client=http_client,
+            dump_dir=dump_dir,
+        )
+        await client.create_task(
+            task_type="HCaptchaClassification",
+            question="Select cats",
+            queries=[sample_b64, "https://example.com/cat2.png"],
+            anchors=[sample_b64],
+        )
+
+    # Verify dump directory structure
+    subfolders = list(dump_dir.glob("HCaptchaClassification_*"))
+    assert len(subfolders) == 1
+    task_folder = subfolders[0]
+
+    assert (task_folder / "question.txt").exists()
+    assert "Select cats" in (task_folder / "question.txt").read_text(encoding="utf-8")
+    assert (task_folder / "query_0.png").exists()
+    assert (task_folder / "query_0.png").read_bytes() == base64.b64decode(sample_b64)
+    assert (task_folder / "query_1.url.txt").exists()
+    assert "https://example.com/cat2.png" in (task_folder / "query_1.url.txt").read_text(encoding="utf-8")
+    assert (task_folder / "anchor_0.png").exists()
+
+

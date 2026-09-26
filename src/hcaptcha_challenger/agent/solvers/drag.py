@@ -29,7 +29,10 @@ class DragDropSolver(ChallengeSolver):
         self.pointer = pointer
 
         if self.config.REASONING_PROVIDER == "yescaptcha":
-            client = YesCaptchaClient(client_key=self.config.YESCAPTCHA_CLIENT_KEY)
+            client = YesCaptchaClient(
+                client_key=self.config.YESCAPTCHA_CLIENT_KEY,
+                dump_dir=self.config.YESCAPTCHA_DUMP_DIR,
+            )
             self._spatial_path_reasoner = YesCaptchaPathReasoner(client=client)
         else:
             self._spatial_path_reasoner = SpatialPathReasoner(
