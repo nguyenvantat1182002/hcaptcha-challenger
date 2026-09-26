@@ -18,7 +18,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from hcaptcha_challenger.agent.config import AgentConfig
 from hcaptcha_challenger.agent.pointer import HumanoidPointer
 from hcaptcha_challenger.helper import create_coordinate_grid
-from hcaptcha_challenger.models import ChallengeTypeEnum, RequestType
+from hcaptcha_challenger.models import ChallengeImage, ChallengeTypeEnum, RequestType
 from hcaptcha_challenger.tools import ChallengeRouter
 
 
@@ -213,26 +213,40 @@ class BrowserArm:
     # Alias for backward compatibility
     _wait_for_all_loaders_complete = wait_for_all_loaders_complete
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_fixed(1),
-        before_sleep=lambda retry_state: logger.warning(
-            f"Retry request ({retry_state.attempt_number}/2) - Wait 1 second - Exception: {retry_state.outcome.exception()}"
-        ),
-    )
-    async def capture_spatial_mapping(
-        self, frame_challenge: FrameLocator | Frame, cache_key: Path, crumb_id: int | str
-    ):
+    async def capture_challenge_image(
+        self, frame_challenge: FrameLocator | Frame
+    ) -> tuple[ChallengeImage, dict | None]:
+        """
+        Capture challenge screenshot directly in-memory as ChallengeImage alongside its bounding box.
+        Operates with zero disk I/O.
+        """
         challenge_view = frame_challenge.locator("//div[@class='challenge-view']")
-        challenge_screenshot = cache_key.joinpath(f"{cache_key.name}_{crumb_id}_challenge_view.png")
-        challenge_screenshot.parent.mkdir(parents=True, exist_ok=True)
-        await challenge_view.screenshot(type="png", path=challenge_screenshot)
-
-        challenge_view = frame_challenge.locator("//div[@class='challenge-view']")
+        png_bytes = await challenge_view.screenshot(type="png")
         bbox = await challenge_view.bounding_box()
+        return ChallengeImage.from_bytes(png_bytes), bbox
+
+    def create_spatial_projection(
+        self,
+        challenge_image: ChallengeImage | str | Path,
+        bbox: dict | None,
+        cache_key: Path,
+        crumb_id: int | str = 0,
+    ) -> Path:
+        """
+        Render coordinate grid projection overlay for visual reasoning (Gemini).
+        """
+        if bbox is None:
+            raise ValueError("Bounding box is required to create coordinate grid projection.")
+
+        if isinstance(challenge_image, ChallengeImage):
+            temp_path = cache_key.joinpath(f"{cache_key.name}_{crumb_id}_challenge_view.png")
+            challenge_image.save(temp_path)
+            img_input = temp_path
+        else:
+            img_input = Path(challenge_image)
 
         result = create_coordinate_grid(
-            challenge_screenshot,
+            img_input,
             bbox,
             x_line_space_num=self.config.coordinate_grid.x_line_space_num,
             y_line_space_num=self.config.coordinate_grid.y_line_space_num,
@@ -243,8 +257,30 @@ class BrowserArm:
         grid_divisions = cache_key.joinpath(f"{cache_key.name}_{crumb_id}_spatial_helper.png")
         grid_divisions.parent.mkdir(parents=True, exist_ok=True)
         plt.imsave(str(grid_divisions.resolve()), result)
+        return grid_divisions
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(1),
+        before_sleep=lambda retry_state: logger.warning(
+            f"Retry request ({retry_state.attempt_number}/2) - Wait 1 second - Exception: {retry_state.outcome.exception()}"
+        ),
+    )
+    async def capture_spatial_mapping(
+        self, frame_challenge: FrameLocator | Frame, cache_key: Path, crumb_id: int | str
+    ):
+        challenge_image, bbox = await self.capture_challenge_image(frame_challenge)
+        challenge_screenshot = cache_key.joinpath(f"{cache_key.name}_{crumb_id}_challenge_view.png")
+        challenge_image.save(challenge_screenshot)
+
+        grid_divisions = self.create_spatial_projection(
+            challenge_image=challenge_image,
+            bbox=bbox,
+            cache_key=cache_key,
+            crumb_id=crumb_id,
+        )
         return challenge_screenshot, grid_divisions
 
     # Alias for backward compatibility
     _capture_spatial_mapping = capture_spatial_mapping
+
