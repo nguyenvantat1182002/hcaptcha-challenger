@@ -1,12 +1,11 @@
-# -*- coding: utf-8 -*-
 import json
-import pytest
+
 import httpx
-from pathlib import Path
+import pytest
 
 from hcaptcha_challenger.models import CaptchaPayload, CaptchaTask, ImageBinaryChallenge
-from hcaptcha_challenger.tools.yescaptcha.client import YesCaptchaClient
 from hcaptcha_challenger.tools.yescaptcha.adapters import YesCaptchaBinaryReasoner
+from hcaptcha_challenger.tools.yescaptcha.client import YesCaptchaClient
 
 
 @pytest.mark.asyncio
@@ -104,6 +103,7 @@ async def test_binary_reasoner_with_fallback_screenshot(tmp_path):
 
 def test_binary_label_solver_uses_yescaptcha_reasoner():
     from unittest.mock import MagicMock
+
     from hcaptcha_challenger.agent.config import AgentConfig
     from hcaptcha_challenger.agent.solvers.binary import BinaryLabelSolver
 
@@ -116,4 +116,32 @@ def test_binary_label_solver_uses_yescaptcha_reasoner():
 
     solver = BinaryLabelSolver(config=config, driver=mock_driver, pointer=mock_pointer)
     assert isinstance(solver._image_classifier, YesCaptchaBinaryReasoner)
+
+
+@pytest.mark.asyncio
+async def test_binary_reasoner_raises_validation_error_when_solution_malformed(tmp_path):
+    from pydantic import ValidationError
+
+    img_path = tmp_path / "challenge_view.png"
+    img_path.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR...")
+
+    # Return solution missing 'objects'
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "errorId": 0,
+                "status": "ready",
+                "solution": {},  # missing objects
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = YesCaptchaClient(client_key="test_key", client=http_client)
+        reasoner = YesCaptchaBinaryReasoner(client=client)
+
+        with pytest.raises(ValidationError):
+            await reasoner(challenge_screenshot=img_path, question="Select dogs")
+
 

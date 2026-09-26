@@ -1,20 +1,18 @@
-# -*- coding: utf-8 -*-
 import json
-import pytest
+
 import httpx
-from pathlib import Path
+import pytest
 
 from hcaptcha_challenger.models import (
     ImageAreaSelectChallenge,
     ImageDragDropChallenge,
     PointCoordinate,
-    SpatialPath,
+)
+from hcaptcha_challenger.tools.yescaptcha.adapters import (
+    YesCaptchaPathReasoner,
+    YesCaptchaPointReasoner,
 )
 from hcaptcha_challenger.tools.yescaptcha.client import YesCaptchaClient
-from hcaptcha_challenger.tools.yescaptcha.adapters import (
-    YesCaptchaPointReasoner,
-    YesCaptchaPathReasoner,
-)
 
 
 @pytest.mark.asyncio
@@ -105,9 +103,10 @@ async def test_yescaptcha_path_reasoner(tmp_path):
 
 def test_area_select_and_drag_drop_solvers_use_yescaptcha_reasoner():
     from unittest.mock import MagicMock
+
     from hcaptcha_challenger.agent.config import AgentConfig
-    from hcaptcha_challenger.agent.solvers.select import AreaSelectSolver
     from hcaptcha_challenger.agent.solvers.drag import DragDropSolver
+    from hcaptcha_challenger.agent.solvers.select import AreaSelectSolver
 
     config = AgentConfig(
         REASONING_PROVIDER="yescaptcha",
@@ -198,5 +197,58 @@ async def test_yescaptcha_path_reasoner_with_bbox(tmp_path):
     assert len(response.paths) == 1
     assert response.paths[0].start_point == PointCoordinate(x=200, y=320)
     assert response.paths[0].end_point == PointCoordinate(x=300, y=440)
+
+
+@pytest.mark.asyncio
+async def test_point_reasoner_raises_validation_error_when_clicks_malformed(tmp_path):
+    from pydantic import ValidationError
+
+    img_path = tmp_path / "area_view.png"
+    img_path.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRdummy")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "errorId": 0,
+                "status": "ready",
+                "solution": {"clicks": [{"x": 100}]},  # missing 'y'
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = YesCaptchaClient(client_key="test_key", client=http_client)
+        reasoner = YesCaptchaPointReasoner(client=client)
+
+        with pytest.raises(ValidationError):
+            await reasoner(challenge_screenshot=img_path, auxiliary_information="find apple")
+
+
+@pytest.mark.asyncio
+async def test_path_reasoner_raises_validation_error_when_box_malformed(tmp_path):
+    from pydantic import ValidationError
+
+    img_path = tmp_path / "drag_view.png"
+    img_path.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRdummy")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "errorId": 0,
+                "status": "ready",
+                "solution": {"box": [{"start": [100]}]},  # missing 'end' and incomplete 'start'
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = YesCaptchaClient(client_key="test_key", client=http_client)
+        reasoner = YesCaptchaPathReasoner(client=client)
+
+        with pytest.raises(ValidationError):
+            await reasoner(challenge_screenshot=img_path, auxiliary_information="drag piece")
+
 
 

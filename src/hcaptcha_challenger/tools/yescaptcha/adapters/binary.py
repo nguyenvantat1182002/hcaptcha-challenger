@@ -1,0 +1,103 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from loguru import logger
+from pydantic import BaseModel
+
+from hcaptcha_challenger.models import (
+    BoundingBoxCoordinate,
+    CaptchaPayload,
+    ImageBinaryChallenge,
+)
+from hcaptcha_challenger.tools.yescaptcha.adapters.base import encode_image_to_base64
+from hcaptcha_challenger.tools.yescaptcha.client import YesCaptchaClient
+
+
+class YesCaptchaBinarySolution(BaseModel):
+    """Structured solution payload for binary classification task."""
+
+    objects: list[bool]
+
+
+class YesCaptchaBinaryReasoner:
+    """
+    Adapter for 9-grid binary image classification using YesCaptcha.
+    Conforms to the Reasoner Seam and returns ImageBinaryChallenge.
+    """
+
+    def __init__(self, client: YesCaptchaClient):
+        self.client = client
+        self._last_response: ImageBinaryChallenge | None = None
+
+    def cache_response(self, path: Path) -> None:
+        """Cache the last response to a file."""
+        if not self._last_response:
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(self._last_response.model_dump_json(indent=2))
+
+    async def __call__(
+        self,
+        *,
+        challenge_screenshot: str | Path | None = None,
+        payload: CaptchaPayload | None = None,
+        question: str | None = None,
+        **kwargs: Any,
+    ) -> ImageBinaryChallenge:
+        # 1. Resolve challenge question
+        if question:
+            q = question
+        elif payload:
+            q = payload.get_requester_question()
+        else:
+            q = "Please click each image containing the requested object."
+
+        # 2. Resolve queries
+        queries: list[str] = []
+        if payload and payload.tasklist:
+            queries = [
+                task.datapoint_uri
+                for task in payload.tasklist
+                if task.datapoint_uri
+            ]
+
+        if not queries:
+            if not challenge_screenshot:
+                raise ValueError("Neither payload with tasklist nor challenge_screenshot provided.")
+            queries = [encode_image_to_base64(challenge_screenshot)]
+
+        # 3. Resolve anchors
+        anchors: list[str] | None = None
+        if payload and payload.requester_question_example:
+            example = payload.requester_question_example
+            if isinstance(example, list):
+                anchors = [str(x) for x in example]
+            elif isinstance(example, str):
+                anchors = [example]
+
+        logger.debug(f"[YesCaptchaBinaryReasoner] Executing task with question='{q}', {len(queries)} queries")
+
+        solution_dict = await self.client.execute_task(
+            task_type="HCaptchaClassification",
+            question=q,
+            queries=queries,
+            anchors=anchors,
+        )
+
+        # Strongly-typed solution validation: 'objects' must be explicitly present as list[bool]
+        solution = YesCaptchaBinarySolution.model_validate(solution_dict)
+
+        # Map 1D boolean array to 2D coordinates [row, col]
+        coordinates: list[BoundingBoxCoordinate] = []
+        for i, is_target in enumerate(solution.objects):
+            if is_target:
+                row = i // 3
+                col = i % 3
+                coordinates.append(BoundingBoxCoordinate(box_2d=[row, col]))
+
+        result = ImageBinaryChallenge(challenge_prompt=q, coordinates=coordinates)
+        self._last_response = result
+        return result
