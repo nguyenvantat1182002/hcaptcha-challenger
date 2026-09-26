@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from hcaptcha_challenger.models import (
     CaptchaPayload,
+    ChallengeImage,
     ImageDragDropChallenge,
     PointCoordinate,
     SpatialPath,
@@ -38,6 +39,8 @@ class YesCaptchaPathReasoner:
     Conforms to Reasoner Seam and returns ImageDragDropChallenge.
     """
 
+    requires_grid_projection: bool = False
+
     def __init__(self, client: YesCaptchaClient):
         self.client = client
         self._last_response: ImageDragDropChallenge | None = None
@@ -53,7 +56,7 @@ class YesCaptchaPathReasoner:
     async def __call__(
         self,
         *,
-        challenge_screenshot: str | Path,
+        challenge_screenshot: ChallengeImage | bytes | str | Path,
         grid_divisions: str | Path | None = None,
         auxiliary_information: str | None = None,
         payload: CaptchaPayload | None = None,

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import base64
+import io
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
 from PIL import Image
 from pydantic import BaseModel
+
+from hcaptcha_challenger.models import ChallengeImage
 
 
 class ViewportBoundingBox(BaseModel):
@@ -18,9 +21,16 @@ class ViewportBoundingBox(BaseModel):
     height: float
 
 
-def encode_image_to_base64(image_path: str | Path) -> str:
-    """Encode an image file to a base64 UTF-8 string."""
-    path = Path(image_path)
+def encode_image_to_base64(image: ChallengeImage | bytes | str | Path) -> str:
+    """Encode an image or ChallengeImage to a base64 UTF-8 string without disk I/O when possible."""
+    if isinstance(image, ChallengeImage):
+        return image.as_base64
+    if isinstance(image, (bytes, bytearray)):
+        return base64.b64encode(image).decode("utf-8")
+    if isinstance(image, str) and image.startswith(("http://", "https://", "data:")):
+        return image
+
+    path = Path(image)
     if not path.is_file():
         raise FileNotFoundError(f"Image not found at path: {path}")
     raw_bytes = path.read_bytes()
@@ -28,7 +38,7 @@ def encode_image_to_base64(image_path: str | Path) -> str:
 
 
 def calculate_viewport_transform(
-    challenge_screenshot: str | Path,
+    challenge_screenshot: ChallengeImage | bytes | str | Path,
     bbox: ViewportBoundingBox | dict[str, Any] | None,
 ) -> tuple[float, float, float, float]:
     """
@@ -48,11 +58,18 @@ def calculate_viewport_transform(
     scale_y = 1.0
 
     try:
-        with Image.open(challenge_screenshot) as img:
-            img_w, img_h = img.size
-            if img_w > 0 and img_h > 0:
-                scale_x = box.width / img_w
-                scale_y = box.height / img_h
+        if isinstance(challenge_screenshot, ChallengeImage):
+            img_w, img_h = challenge_screenshot.dimensions
+        elif isinstance(challenge_screenshot, (bytes, bytearray)):
+            with Image.open(io.BytesIO(challenge_screenshot)) as img:
+                img_w, img_h = img.size
+        else:
+            with Image.open(challenge_screenshot) as img:
+                img_w, img_h = img.size
+
+        if img_w > 0 and img_h > 0:
+            scale_x = box.width / img_w
+            scale_y = box.height / img_h
     except (OSError, ValueError) as e:
         logger.warning(f"Could not inspect image dimensions for scaling: {e}")
 

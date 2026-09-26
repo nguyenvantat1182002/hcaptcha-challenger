@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from hcaptcha_challenger.models import (
     BoundingBoxCoordinate,
     CaptchaPayload,
+    ChallengeImage,
     ImageBinaryChallenge,
 )
 from hcaptcha_challenger.tools.yescaptcha.adapters.base import encode_image_to_base64
@@ -27,6 +28,8 @@ class YesCaptchaBinaryReasoner:
     Conforms to the Reasoner Seam and returns ImageBinaryChallenge.
     """
 
+    requires_grid_projection: bool = False
+
     def __init__(self, client: YesCaptchaClient):
         self.client = client
         self._last_response: ImageBinaryChallenge | None = None
@@ -42,7 +45,7 @@ class YesCaptchaBinaryReasoner:
     async def __call__(
         self,
         *,
-        challenge_screenshot: str | Path | None = None,
+        challenge_screenshot: ChallengeImage | bytes | str | Path | None = None,
         payload: CaptchaPayload | None = None,
         question: str | None = None,
         **kwargs: Any,

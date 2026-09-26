@@ -251,4 +251,64 @@ async def test_path_reasoner_raises_validation_error_when_box_malformed(tmp_path
             await reasoner(challenge_screenshot=img_path, auxiliary_information="drag piece")
 
 
+def test_reasoners_declare_requires_grid_projection_flag():
+    from hcaptcha_challenger.tools import SpatialPathReasoner, SpatialPointReasoner
+    from hcaptcha_challenger.tools.yescaptcha import (
+        YesCaptchaBinaryReasoner,
+        YesCaptchaPathReasoner,
+        YesCaptchaPointReasoner,
+    )
+
+    assert YesCaptchaPointReasoner.requires_grid_projection is False
+    assert YesCaptchaPathReasoner.requires_grid_projection is False
+    assert YesCaptchaBinaryReasoner.requires_grid_projection is False
+    assert SpatialPointReasoner.requires_grid_projection is True
+    assert SpatialPathReasoner.requires_grid_projection is True
+
+
+@pytest.mark.asyncio
+async def test_yescaptcha_point_reasoner_with_in_memory_challenge_image():
+    import io
+
+    from PIL import Image
+
+    from hcaptcha_challenger.models import ChallengeImage
+
+    # Generate image in-memory
+    buf = io.BytesIO()
+    Image.new("RGB", (400, 300), color="purple").save(buf, format="PNG")
+    challenge_image = ChallengeImage.from_bytes(buf.getvalue())
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "errorId": 0,
+                "status": "ready",
+                "solution": {
+                    "clicks": [
+                        {"x": 100, "y": 150},
+                    ]
+                },
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = YesCaptchaClient(client_key="test_key", client=http_client)
+        reasoner = YesCaptchaPointReasoner(client=client)
+
+        bbox = {"x": 50, "y": 50, "width": 800, "height": 600}  # 2x scaling
+        response = await reasoner(
+            challenge_screenshot=challenge_image,
+            auxiliary_information="find star",
+            bbox=bbox,
+        )
+
+    assert len(response.points) == 1
+    # 50 + 100 * 2 = 250, 50 + 150 * 2 = 350
+    assert response.points[0] == PointCoordinate(x=250, y=350)
+
+
+
 

@@ -28,6 +28,8 @@ class SpatialReasoner(Reasoner[SCoTModelType, ResponseT], ABC):
     - Standard image upload pattern (challenge + grid)
     """
 
+    requires_grid_projection: bool = True
+
     async def _invoke_spatial(
         self,
         *,
