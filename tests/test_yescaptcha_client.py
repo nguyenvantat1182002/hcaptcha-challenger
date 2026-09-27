@@ -248,6 +248,8 @@ async def test_client_report_recent_tasks():
         assert len(reported_payloads) == 1
         assert reported_payloads[0] == {
             "clientKey": "test_key",
+            "id": "task_fail_1",
+            "isSuccess": False,
             "taskId": "task_fail_1",
             "correct": False,
         }

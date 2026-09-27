@@ -269,6 +269,8 @@ class YesCaptchaClient:
         """
         payload = {
             "clientKey": self._client_key,
+            "id": task_id,
+            "isSuccess": is_correct,
             "taskId": task_id,
             "correct": is_correct,
         }
@@ -296,7 +298,7 @@ class YesCaptchaClient:
                 res = await self.report(task_id=task_id, is_correct=is_correct)
                 results.append(res)
                 logger.info(
-                    f"Reported YesCaptcha task {task_id} with correct={is_correct}"
+                    f"Reported YesCaptcha task {task_id} with isSuccess={is_correct}: {res}"
                 )
             except Exception as e:
                 logger.warning(f"Failed to report YesCaptcha task {task_id}: {e}")
