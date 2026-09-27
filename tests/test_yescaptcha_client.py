@@ -214,3 +214,67 @@ async def test_client_dump_images(tmp_path):
     assert (task_folder / "anchor_0.png").exists()
 
 
+@pytest.mark.asyncio
+async def test_client_report_recent_tasks():
+    reported_payloads = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/createTask":
+            return httpx.Response(
+                200,
+                json={"errorId": 0, "status": "ready", "solution": {}, "taskId": "task_fail_1"},
+            )
+        elif request.url.path == "/report":
+            payload = json.loads(request.content)
+            reported_payloads.append(payload)
+            return httpx.Response(200, json={"errorId": 0, "status": "success"})
+        return httpx.Response(404)
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = YesCaptchaClient(client_key="test_key", client=http_client)
+        
+        # Execute a task
+        await client.execute_task(
+            task_type="HCaptchaClassification",
+            question="select cars",
+            queries=["car1"],
+        )
+        assert client.recent_task_ids == ["task_fail_1"]
+
+        # Report as incorrect
+        results = await client.report_recent_tasks(is_correct=False)
+        assert len(results) == 1
+        assert len(reported_payloads) == 1
+        assert reported_payloads[0] == {
+            "clientKey": "test_key",
+            "taskId": "task_fail_1",
+            "correct": False,
+        }
+
+        # Recent task IDs should now be cleared
+        assert client.recent_task_ids == []
+
+
+@pytest.mark.asyncio
+async def test_client_clear_recent_tasks():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"errorId": 0, "status": "ready", "solution": {}, "taskId": "task_pass_1"},
+        )
+
+    transport = httpx.MockTransport(handler)
+    async with httpx.AsyncClient(transport=transport) as http_client:
+        client = YesCaptchaClient(client_key="test_key", client=http_client)
+        await client.execute_task(
+            task_type="HCaptchaClassification",
+            question="select cars",
+            queries=["car1"],
+        )
+        assert client.recent_task_ids == ["task_pass_1"]
+        client.clear_recent_tasks()
+        assert client.recent_task_ids == []
+
+
+

@@ -83,6 +83,12 @@ class YesCaptchaClient:
             headers=DEFAULT_HEADERS,
             timeout=self.timeout,
         )
+        self._recent_task_ids: list[str | int] = []
+
+    @property
+    def recent_task_ids(self) -> list[str | int]:
+        """List of recent task IDs executed by this client."""
+        return list(self._recent_task_ids)
 
     @property
     def http_client(self) -> httpx.AsyncClient:
@@ -167,6 +173,9 @@ class YesCaptchaClient:
             raise YesCaptchaError(f"HTTP request to {url} failed: {e}") from e
 
         self._check_api_error(data)
+        task_id = data.get("taskId")
+        if task_id is not None:
+            self._recent_task_ids.append(task_id)
         return data
 
     async def get_task_result(self, task_id: str | int) -> dict[str, Any]:
@@ -274,3 +283,27 @@ class YesCaptchaClient:
 
         self._check_api_error(data)
         return data
+
+    async def report_recent_tasks(self, is_correct: bool = False) -> list[dict[str, Any]]:
+        """
+        Reports feedback for all recently executed tasks and clears the recorded task IDs.
+        """
+        task_ids = list(self._recent_task_ids)
+        self._recent_task_ids.clear()
+        results = []
+        for task_id in task_ids:
+            try:
+                res = await self.report(task_id=task_id, is_correct=is_correct)
+                results.append(res)
+                logger.info(
+                    f"Reported YesCaptcha task {task_id} with correct={is_correct}"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to report YesCaptcha task {task_id}: {e}")
+        return results
+
+    def clear_recent_tasks(self) -> None:
+        """
+        Clears recent task IDs without reporting.
+        """
+        self._recent_task_ids.clear()

@@ -30,13 +30,14 @@ class AreaSelectSolver(ChallengeSolver):
         self.config = config
         self.driver = driver
         self.pointer = pointer
+        self._yescaptcha_client: YesCaptchaClient | None = None
 
         if self.config.REASONING_PROVIDER == "yescaptcha":
-            client = YesCaptchaClient(
+            self._yescaptcha_client = YesCaptchaClient(
                 client_key=self.config.YESCAPTCHA_CLIENT_KEY,
                 dump_dir=self.config.YESCAPTCHA_DUMP_DIR,
             )
-            self._spatial_point_reasoner = YesCaptchaPointReasoner(client=client)
+            self._spatial_point_reasoner = YesCaptchaPointReasoner(client=self._yescaptcha_client)
         else:
             self._spatial_point_reasoner = SpatialPointReasoner(
                 gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),

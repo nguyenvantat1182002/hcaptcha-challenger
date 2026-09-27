@@ -30,3 +30,20 @@ class ChallengeSolver(ABC):
         """
         Executes end-to-end challenge resolution for this challenge type.
         """
+
+    async def report_feedback(self, is_correct: bool = False) -> None:
+        """
+        Reports accuracy feedback for tasks executed by this solver.
+        Default implementation delegates to YesCaptchaClient if available.
+        """
+        client = getattr(self, "_yescaptcha_client", None)
+        if client is not None:
+            await client.report_recent_tasks(is_correct=is_correct)
+
+    def clear_feedback(self) -> None:
+        """
+        Clears pending feedback tasks when challenge succeeds.
+        """
+        client = getattr(self, "_yescaptcha_client", None)
+        if client is not None:
+            client.clear_recent_tasks()

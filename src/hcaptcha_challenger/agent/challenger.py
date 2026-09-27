@@ -4,11 +4,12 @@
 # Description:
 import asyncio
 import json
+import httpx
+import msgpack
+
 from asyncio import Queue
 from contextlib import suppress
 from datetime import datetime
-
-import msgpack
 from loguru import logger
 from playwright.async_api import Frame, Locator, Page, Response
 
@@ -23,6 +24,7 @@ from hcaptcha_challenger.agent.solvers import (
     AreaSelectSolver,
     BinaryLabelSolver,
     ChallengeContext,
+    ChallengeSolver,
     DragDropSolver,
     SolverRegistry,
 )
@@ -65,6 +67,7 @@ class AgentV:
         self._captcha_payload_queue: Queue[CaptchaPayload | None] = Queue()
         self._captcha_response_queue: Queue[CaptchaResponse] = Queue()
         self.cr_list: list[CaptchaResponse] = []
+        self._active_solver: ChallengeSolver | None = None
 
         self.page.on("response", self._task_handler)
 
@@ -115,7 +118,9 @@ class AgentV:
     async def _task_handler(self, response: Response):
         if response.url.endswith("/hsw.js"):
             try:
-                hsw_text = await response.text()
+                async with httpx.AsyncClient(headers=response.headers, timeout=30) as client:
+                    hsw_text = await client.get(response.url)
+                    hsw_text = hsw_text.text
                 await self.page.evaluate(hsw_text)
                 await self.page.evaluate("""
                     () => {
@@ -171,13 +176,19 @@ class AgentV:
                             }}
                         }}
                         """)
-
+                        
                     if isinstance(result, list) and not any(
                         isinstance(x, dict) and "error" in x for x in result
                     ):
-                        unpacked_data = msgpack.unpackb(bytes(result))
-                        captcha_payload = CaptchaPayload(**unpacked_data)
-                        self._captcha_payload_queue.put_nowait(captcha_payload)
+                        unpacked_data: dict = msgpack.unpackb(bytes(result))
+                        if unpacked_data.get('pass'):
+                            while not self._captcha_response_queue.empty():
+                                self._captcha_response_queue.get_nowait()
+                            cr = CaptchaResponse(**unpacked_data)
+                            self._captcha_response_queue.put_nowait(cr)
+                        else:
+                            captcha_payload = CaptchaPayload(**unpacked_data)
+                            self._captcha_payload_queue.put_nowait(captcha_payload)
                         return
                 else:
                     logger.warning("HSW reverse failed, fallback to regular processing")
@@ -270,6 +281,7 @@ class AgentV:
             else:
                 solver = self.solver_registry.get(challenge_type)
                 if solver:
+                    self._active_solver = solver
                     frame = await self.arm.get_challenge_frame_locator()
                     if frame:
                         cache_key = self.config.create_cache_key(self._captcha_payload)
@@ -314,6 +326,8 @@ class AgentV:
             return ChallengeSignal.EXECUTION_TIMEOUT
         else:
             if not cr or not cr.is_pass:
+                if self._active_solver:
+                    await self._active_solver.report_feedback(is_correct=False)
                 if self.config.RETRY_ON_FAILURE:
                     logger.warning("Failed to challenge, try to retry the strategy")
                     await self.page.wait_for_timeout(2000)
@@ -321,6 +335,8 @@ class AgentV:
                 return ChallengeSignal.FAILURE
             if cr.is_pass:
                 logger.success("Challenge success")
+                if self._active_solver:
+                    self._active_solver.clear_feedback()
                 self._cache_validated_captcha_response(cr)
                 return ChallengeSignal.SUCCESS
 

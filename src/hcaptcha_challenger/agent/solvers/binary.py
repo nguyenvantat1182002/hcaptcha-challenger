@@ -25,13 +25,14 @@ class BinaryLabelSolver(ChallengeSolver):
         self.config = config
         self.driver = driver
         self.pointer = pointer
+        self._yescaptcha_client: YesCaptchaClient | None = None
 
         if self.config.REASONING_PROVIDER == "yescaptcha":
-            client = YesCaptchaClient(
+            self._yescaptcha_client = YesCaptchaClient(
                 client_key=self.config.YESCAPTCHA_CLIENT_KEY,
                 dump_dir=self.config.YESCAPTCHA_DUMP_DIR,
             )
-            self._image_classifier = YesCaptchaBinaryReasoner(client=client)
+            self._image_classifier = YesCaptchaBinaryReasoner(client=self._yescaptcha_client)
         else:
             self._image_classifier = ImageClassifier(
                 gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
