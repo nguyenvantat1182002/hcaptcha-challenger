@@ -38,6 +38,7 @@ from hcaptcha_challenger.models import (
 
 
 from hcaptcha_challenger.agent.robotic_arm import RoboticArm
+from hcaptcha_challenger.tools.yescaptcha import YesCaptchaError
 
 
 class AgentV:
@@ -107,7 +108,9 @@ class AgentV:
         try:
             captcha_response = cr.model_dump(mode="json", by_alias=True)
             current_time = datetime.now().strftime("%Y%m%d/%Y%m%d%H%M%S%f")
-            cache_path = self.config.captcha_response_dir.joinpath(f"{current_time}.json")
+            cache_path = self.config.captcha_response_dir.joinpath(
+                f"{current_time}.json"
+            )
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             t = json.dumps(captcha_response, indent=2, ensure_ascii=False)
             cache_path.write_text(t, encoding="utf-8")
@@ -118,7 +121,9 @@ class AgentV:
     async def _task_handler(self, response: Response):
         if response.url.endswith("/hsw.js"):
             try:
-                async with httpx.AsyncClient(headers=response.headers, timeout=30) as client:
+                async with httpx.AsyncClient(
+                    headers=response.headers, timeout=30
+                ) as client:
                     hsw_text = await client.get(response.url)
                     hsw_text = hsw_text.text
                 await self.page.evaluate(hsw_text)
@@ -152,7 +157,9 @@ class AgentV:
 
                 # [DEBUG] Force fallback to visual recognition for testing
                 if self.config.DISABLE_HSW_REVERSE:
-                    logger.warning("HSW reverse disabled by config, fallback to regular processing")
+                    logger.warning(
+                        "HSW reverse disabled by config, fallback to regular processing"
+                    )
                     self._captcha_payload_queue.put_nowait(None)
                     return
 
@@ -176,12 +183,12 @@ class AgentV:
                             }}
                         }}
                         """)
-                        
+
                     if isinstance(result, list) and not any(
                         isinstance(x, dict) and "error" in x for x in result
                     ):
                         unpacked_data: dict = msgpack.unpackb(bytes(result))
-                        if unpacked_data.get('pass'):
+                        if unpacked_data.get("pass"):
                             while not self._captcha_response_queue.empty():
                                 self._captcha_response_queue.get_nowait()
                             cr = CaptchaResponse(**unpacked_data)
@@ -233,7 +240,9 @@ class AgentV:
                 case RequestType.IMAGE_LABEL_AREA_SELECT:
                     self.arm.signal_crumb_count = tasklist_length
                     self.robotic_arm.signal_crumb_count = self.arm.signal_crumb_count
-                    max_shapes = self._captcha_payload.request_config.max_shapes_per_image
+                    max_shapes = (
+                        self._captcha_payload.request_config.max_shapes_per_image
+                    )
                     if not isinstance(max_shapes, int):
                         return await self.arm.check_challenge_type()
                     return (
@@ -300,6 +309,9 @@ class AgentV:
             await self.page.wait_for_timeout(2000)
             await self.arm.refresh_challenge()
             return await self._solve_captcha()
+        except YesCaptchaError as err:
+            logger.error(f"YesCaptcha error encountered, aborting challenge: {err}")
+            raise
         except Exception as err:
             logger.exception(f"ChallengeException - type={type_str} {err=}")
             await self.page.wait_for_timeout(5000)
@@ -312,8 +324,13 @@ class AgentV:
                 await asyncio.wait_for(
                     self._solve_captcha(), timeout=self.config.EXECUTION_TIMEOUT
                 )
+        except YesCaptchaError as err:
+            logger.error(f"Aborting challenge execution due to YesCaptcha error: {err}")
+            return ChallengeSignal.FAILURE
         except asyncio.TimeoutError:
-            logger.error("Challenge execution timed out", timeout=self.config.EXECUTION_TIMEOUT)
+            logger.error(
+                "Challenge execution timed out", timeout=self.config.EXECUTION_TIMEOUT
+            )
             return ChallengeSignal.EXECUTION_TIMEOUT
 
         logger.debug("Start checking captcha response")
@@ -322,7 +339,9 @@ class AgentV:
                 self._captcha_response_queue.get(), timeout=self.config.RESPONSE_TIMEOUT
             )
         except asyncio.TimeoutError:
-            logger.error(f"Wait for captcha response timeout {self.config.RESPONSE_TIMEOUT}s")
+            logger.error(
+                f"Wait for captcha response timeout {self.config.RESPONSE_TIMEOUT}s"
+            )
             return ChallengeSignal.EXECUTION_TIMEOUT
         else:
             if not cr or not cr.is_pass:
