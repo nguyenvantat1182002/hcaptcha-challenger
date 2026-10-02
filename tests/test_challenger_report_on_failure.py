@@ -113,9 +113,7 @@ async def test_challenger_aborts_on_yescaptcha_exception_without_retry():
     agent.arm.refresh_challenge = AsyncMock()
     agent.arm.check_crumb_count = AsyncMock(return_value=1)
     agent.arm.get_challenge_frame_locator = AsyncMock(return_value=MagicMock())
-    agent._review_challenge_type = AsyncMock(
-        return_value=RequestType.IMAGE_LABEL_BINARY
-    )
+    agent._review_challenge_type = AsyncMock(return_value=RequestType.IMAGE_LABEL_BINARY)
 
     mock_solver = AsyncMock(spec=ChallengeSolver)
     mock_solver.solve = AsyncMock(
@@ -148,14 +146,10 @@ async def test_solve_captcha_raises_yescaptcha_error_directly():
     agent.arm.refresh_challenge = AsyncMock()
     agent.arm.check_crumb_count = AsyncMock(return_value=1)
     agent.arm.get_challenge_frame_locator = AsyncMock(return_value=MagicMock())
-    agent._review_challenge_type = AsyncMock(
-        return_value=RequestType.IMAGE_LABEL_BINARY
-    )
+    agent._review_challenge_type = AsyncMock(return_value=RequestType.IMAGE_LABEL_BINARY)
 
     mock_solver = AsyncMock(spec=ChallengeSolver)
-    mock_solver.solve = AsyncMock(
-        side_effect=YesCaptchaTimeoutError("Polling timed out")
-    )
+    mock_solver.solve = AsyncMock(side_effect=YesCaptchaTimeoutError("Polling timed out"))
     agent.solver_registry.register(RequestType.IMAGE_LABEL_BINARY, mock_solver)
 
     with pytest.raises(YesCaptchaTimeoutError):

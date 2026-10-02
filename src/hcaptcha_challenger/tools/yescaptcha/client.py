@@ -67,9 +67,7 @@ class YesCaptchaClient:
         dump_dir: Path | str | None = Path("tmp/.yescaptcha_dumps"),
     ):
         self._client_key = (
-            client_key.get_secret_value()
-            if isinstance(client_key, SecretStr)
-            else client_key
+            client_key.get_secret_value() if isinstance(client_key, SecretStr) else client_key
         )
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -128,17 +126,11 @@ class YesCaptchaClient:
         Creates a new solving task on YesCaptcha.
         """
         query_items = [queries] if isinstance(queries, str) else list(queries)
-        anchor_items = (
-            [anchors]
-            if isinstance(anchors, str)
-            else (list(anchors) if anchors else [])
-        )
+        anchor_items = [anchors] if isinstance(anchors, str) else (list(anchors) if anchors else [])
 
         if self.dump_dir:
             try:
-                task_folder = self.dump_dir.joinpath(
-                    f"{task_type}_{int(time.time() * 1000)}"
-                )
+                task_folder = self.dump_dir.joinpath(f"{task_type}_{int(time.time() * 1000)}")
                 task_folder.mkdir(parents=True, exist_ok=True)
 
                 task_folder.joinpath("question.txt").write_text(
@@ -250,9 +242,7 @@ class YesCaptchaClient:
         if status == "ready":
             solution = initial_data.get("solution")
             if solution is None:
-                raise YesCaptchaTaskError(
-                    "Response was 'ready' but contained no solution."
-                )
+                raise YesCaptchaTaskError("Response was 'ready' but contained no solution.")
             return solution
 
         task_id = initial_data.get("taskId")
@@ -290,9 +280,7 @@ class YesCaptchaClient:
         self._check_api_error(data)
         return data
 
-    async def report_recent_tasks(
-        self, is_correct: bool = False
-    ) -> list[dict[str, Any]]:
+    async def report_recent_tasks(self, is_correct: bool = False) -> list[dict[str, Any]]:
         """
         Reports feedback for all recently executed tasks and clears the recorded task IDs.
         """

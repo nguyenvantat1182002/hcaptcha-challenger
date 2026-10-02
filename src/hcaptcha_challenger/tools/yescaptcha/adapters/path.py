@@ -72,9 +72,7 @@ class YesCaptchaPathReasoner:
         )
 
         queries = [
-            await resolve_image_to_base64(
-                challenge_screenshot, http_client=self.client.http_client
-            )
+            await resolve_image_to_base64(challenge_screenshot, http_client=self.client.http_client)
         ]
 
         logger.debug(f"[YesCaptchaPathReasoner] Executing task with prompt='{q}'")

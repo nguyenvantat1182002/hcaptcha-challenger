@@ -73,15 +73,9 @@ class AgentV:
         self.page.on("response", self._task_handler)
 
     def _init_solvers(self):
-        binary_solver = BinaryLabelSolver(
-            config=self.config, driver=self.arm, pointer=self.pointer
-        )
-        select_solver = AreaSelectSolver(
-            config=self.config, driver=self.arm, pointer=self.pointer
-        )
-        drag_solver = DragDropSolver(
-            config=self.config, driver=self.arm, pointer=self.pointer
-        )
+        binary_solver = BinaryLabelSolver(config=self.config, driver=self.arm, pointer=self.pointer)
+        select_solver = AreaSelectSolver(config=self.config, driver=self.arm, pointer=self.pointer)
+        drag_solver = DragDropSolver(config=self.config, driver=self.arm, pointer=self.pointer)
 
         self.solver_registry.register(RequestType.IMAGE_LABEL_BINARY, binary_solver)
         self.solver_registry.register(
@@ -108,9 +102,7 @@ class AgentV:
         try:
             captcha_response = cr.model_dump(mode="json", by_alias=True)
             current_time = datetime.now().strftime("%Y%m%d/%Y%m%d%H%M%S%f")
-            cache_path = self.config.captcha_response_dir.joinpath(
-                f"{current_time}.json"
-            )
+            cache_path = self.config.captcha_response_dir.joinpath(f"{current_time}.json")
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             t = json.dumps(captcha_response, indent=2, ensure_ascii=False)
             cache_path.write_text(t, encoding="utf-8")
@@ -121,9 +113,7 @@ class AgentV:
     async def _task_handler(self, response: Response):
         if response.url.endswith("/hsw.js"):
             try:
-                async with httpx.AsyncClient(
-                    headers=response.headers, timeout=30
-                ) as client:
+                async with httpx.AsyncClient(headers=response.headers, timeout=30) as client:
                     hsw_text = await client.get(response.url)
                     hsw_text = hsw_text.text
                 await self.page.evaluate(hsw_text)
@@ -157,9 +147,7 @@ class AgentV:
 
                 # [DEBUG] Force fallback to visual recognition for testing
                 if self.config.DISABLE_HSW_REVERSE:
-                    logger.warning(
-                        "HSW reverse disabled by config, fallback to regular processing"
-                    )
+                    logger.warning("HSW reverse disabled by config, fallback to regular processing")
                     self._captcha_payload_queue.put_nowait(None)
                     return
 
@@ -240,9 +228,7 @@ class AgentV:
                 case RequestType.IMAGE_LABEL_AREA_SELECT:
                     self.arm.signal_crumb_count = tasklist_length
                     self.robotic_arm.signal_crumb_count = self.arm.signal_crumb_count
-                    max_shapes = (
-                        self._captcha_payload.request_config.max_shapes_per_image
-                    )
+                    max_shapes = self._captcha_payload.request_config.max_shapes_per_image
                     if not isinstance(max_shapes, int):
                         return await self.arm.check_challenge_type()
                     return (
@@ -283,9 +269,7 @@ class AgentV:
                             return await self._solve_captcha()
 
             # Check if challenge type is filtered out
-            if self.solver_registry.is_ignored(
-                challenge_type, self.config.ignore_request_types
-            ):
+            if self.solver_registry.is_ignored(challenge_type, self.config.ignore_request_types):
                 logger.info(f"Ignoring challenge type: {challenge_type}")
             else:
                 solver = self.solver_registry.get(challenge_type)
@@ -321,16 +305,12 @@ class AgentV:
     async def wait_for_challenge(self) -> ChallengeSignal:
         try:
             if self._captcha_response_queue.empty():
-                await asyncio.wait_for(
-                    self._solve_captcha(), timeout=self.config.EXECUTION_TIMEOUT
-                )
+                await asyncio.wait_for(self._solve_captcha(), timeout=self.config.EXECUTION_TIMEOUT)
         except YesCaptchaError as err:
             logger.error(f"Aborting challenge execution due to YesCaptcha error: {err}")
             return ChallengeSignal.FAILURE
         except asyncio.TimeoutError:
-            logger.error(
-                "Challenge execution timed out", timeout=self.config.EXECUTION_TIMEOUT
-            )
+            logger.error("Challenge execution timed out", timeout=self.config.EXECUTION_TIMEOUT)
             return ChallengeSignal.EXECUTION_TIMEOUT
 
         logger.debug("Start checking captcha response")
@@ -339,9 +319,7 @@ class AgentV:
                 self._captcha_response_queue.get(), timeout=self.config.RESPONSE_TIMEOUT
             )
         except asyncio.TimeoutError:
-            logger.error(
-                f"Wait for captcha response timeout {self.config.RESPONSE_TIMEOUT}s"
-            )
+            logger.error(f"Wait for captcha response timeout {self.config.RESPONSE_TIMEOUT}s")
             return ChallengeSignal.EXECUTION_TIMEOUT
         else:
             if not cr or not cr.is_pass:

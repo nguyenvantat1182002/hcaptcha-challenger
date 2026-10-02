@@ -59,9 +59,7 @@ def calculate_viewport_transform(
         return 0.0, 0.0, 1.0, 1.0
 
     box = (
-        bbox
-        if isinstance(bbox, ViewportBoundingBox)
-        else ViewportBoundingBox.model_validate(bbox)
+        bbox if isinstance(bbox, ViewportBoundingBox) else ViewportBoundingBox.model_validate(bbox)
     )
     offset_x = box.x
     offset_y = box.y

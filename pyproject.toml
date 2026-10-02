@@ -102,6 +102,7 @@ style = "pep440"
 bump = true
 
 [tool.ruff]
+line-length = 100
 exclude = ["archive/", "*.ipynb"]
 
 [dependency-groups]

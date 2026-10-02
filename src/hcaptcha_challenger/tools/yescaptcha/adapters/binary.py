@@ -58,15 +58,11 @@ class YesCaptchaBinaryReasoner:
 
         raw_queries: list[Any] = []
         if payload and payload.tasklist:
-            raw_queries = [
-                task.datapoint_uri for task in payload.tasklist if task.datapoint_uri
-            ]
+            raw_queries = [task.datapoint_uri for task in payload.tasklist if task.datapoint_uri]
 
         if not raw_queries:
             if not challenge_screenshot:
-                raise ValueError(
-                    "Neither payload with tasklist nor challenge_screenshot provided."
-                )
+                raise ValueError("Neither payload with tasklist nor challenge_screenshot provided.")
             raw_queries = [challenge_screenshot]
 
         queries = await asyncio.gather(
