@@ -9,7 +9,7 @@ import base64
 import json
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import httpx
 from loguru import logger
@@ -30,25 +30,21 @@ DEFAULT_HEADERS = {
 }
 
 
-def _dump_image_item(item: str, save_path: Path) -> None:
+def _dump_image_item(item: str | bytes, save_path: Path) -> None:
     """Save an image query or anchor item to disk (supports base64 and URL)."""
     try:
-        if not isinstance(item, (str, bytes)):
-            return
-        # If it's a URL
         if isinstance(item, str) and item.startswith(("http://", "https://")):
             txt_path = save_path.with_suffix(".url.txt")
             txt_path.parent.mkdir(parents=True, exist_ok=True)
             txt_path.write_text(item, encoding="utf-8")
         else:
-            # Assume base64 string
             raw_str = item if isinstance(item, str) else item.decode("ascii")
             if "," in raw_str:
                 raw_str = raw_str.split(",", 1)[1]
             raw_bytes = base64.b64decode(raw_str)
             save_path.parent.mkdir(parents=True, exist_ok=True)
             save_path.write_bytes(raw_bytes)
-    except Exception as e:
+    except (OSError, ValueError) as e:
         logger.warning(f"Failed to dump debug image to {save_path}: {e}")
 
 
@@ -71,7 +67,9 @@ class YesCaptchaClient:
         dump_dir: Path | str | None = Path("tmp/.yescaptcha_dumps"),
     ):
         self._client_key = (
-            client_key.get_secret_value() if isinstance(client_key, SecretStr) else client_key
+            client_key.get_secret_value()
+            if isinstance(client_key, SecretStr)
+            else client_key
         )
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -95,7 +93,7 @@ class YesCaptchaClient:
         """The underlying httpx.AsyncClient instance."""
         return self._client
 
-    async def __aenter__(self) -> YesCaptchaClient:
+    async def __aenter__(self) -> Self:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -129,35 +127,40 @@ class YesCaptchaClient:
         """
         Creates a new solving task on YesCaptcha.
         """
-        # Dump images to disk if dump_dir is configured
+        query_items = [queries] if isinstance(queries, str) else list(queries)
+        anchor_items = (
+            [anchors]
+            if isinstance(anchors, str)
+            else (list(anchors) if anchors else [])
+        )
+
         if self.dump_dir:
             try:
-                task_folder = self.dump_dir.joinpath(f"{task_type}_{int(time.time() * 1000)}")
+                task_folder = self.dump_dir.joinpath(
+                    f"{task_type}_{int(time.time() * 1000)}"
+                )
                 task_folder.mkdir(parents=True, exist_ok=True)
 
                 task_folder.joinpath("question.txt").write_text(
                     f"Type: {task_type}\nQuestion: {question}\n", encoding="utf-8"
                 )
 
-                query_list = queries if isinstance(queries, list) else [queries]
-                for idx, q_item in enumerate(query_list):
+                for idx, q_item in enumerate(query_items):
                     _dump_image_item(q_item, task_folder.joinpath(f"query_{idx}.png"))
 
-                if anchors:
-                    anchor_list = anchors if isinstance(anchors, list) else [anchors]
-                    for idx, a_item in enumerate(anchor_list):
-                        _dump_image_item(a_item, task_folder.joinpath(f"anchor_{idx}.png"))
-            except Exception as e:
+                for idx, a_item in enumerate(anchor_items):
+                    _dump_image_item(a_item, task_folder.joinpath(f"anchor_{idx}.png"))
+            except OSError as e:
                 logger.warning(f"Error while dumping YesCaptcha task images: {e}")
 
         task_payload: dict[str, Any] = {
             "type": task_type,
             "question": question,
-            "queries": queries,
+            "queries": query_items,
             **extra,
         }
-        if anchors:
-            task_payload["anchors"] = anchors
+        if anchor_items:
+            task_payload["anchors"] = anchor_items
 
         payload = {
             "clientKey": self._client_key,
@@ -206,7 +209,7 @@ class YesCaptchaClient:
         for attempt in range(1, self.max_poll_attempts + 1):
             await asyncio.sleep(interval)
             data = await self.get_task_result(task_id)
-            status = data.get("status")
+            status = data["status"]
 
             if status == "ready":
                 return data
@@ -217,7 +220,6 @@ class YesCaptchaClient:
                     error_description=str(data),
                 )
 
-            # Minor backoff up to 3s
             interval = min(interval * 1.25, 3.0)
 
         raise YesCaptchaTimeoutError(
@@ -244,11 +246,13 @@ class YesCaptchaClient:
             **extra,
         )
 
-        status = initial_data.get("status")
+        status = initial_data["status"]
         if status == "ready":
             solution = initial_data.get("solution")
             if solution is None:
-                raise YesCaptchaTaskError("Response was 'ready' but contained no solution.")
+                raise YesCaptchaTaskError(
+                    "Response was 'ready' but contained no solution."
+                )
             return solution
 
         task_id = initial_data.get("taskId")
@@ -286,7 +290,9 @@ class YesCaptchaClient:
         self._check_api_error(data)
         return data
 
-    async def report_recent_tasks(self, is_correct: bool = False) -> list[dict[str, Any]]:
+    async def report_recent_tasks(
+        self, is_correct: bool = False
+    ) -> list[dict[str, Any]]:
         """
         Reports feedback for all recently executed tasks and clears the recorded task IDs.
         """
@@ -300,7 +306,7 @@ class YesCaptchaClient:
                 logger.info(
                     f"Reported YesCaptcha task {task_id} with isSuccess={is_correct}: {res}"
                 )
-            except Exception as e:
+            except YesCaptchaError as e:
                 logger.warning(f"Failed to report YesCaptcha task {task_id}: {e}")
         return results
 

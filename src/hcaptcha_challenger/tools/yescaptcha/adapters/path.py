@@ -14,6 +14,7 @@ from hcaptcha_challenger.models import (
     SpatialPath,
 )
 from hcaptcha_challenger.tools.yescaptcha.adapters.base import (
+    ViewportBoundingBox,
     calculate_viewport_transform,
     resolve_image_to_base64,
 )
@@ -50,8 +51,7 @@ class YesCaptchaPathReasoner:
         if not self._last_response:
             return
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(self._last_response.model_dump_json(indent=2))
+        path.write_text(self._last_response.model_dump_json(indent=2), encoding="utf-8")
 
     async def __call__(
         self,
@@ -61,21 +61,20 @@ class YesCaptchaPathReasoner:
         auxiliary_information: str | None = None,
         payload: CaptchaPayload | None = None,
         question: str | None = None,
+        bbox: ViewportBoundingBox | dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ImageDragDropChallenge:
-        # 1. Resolve question/prompt
-        if question:
-            q = question
-        elif auxiliary_information:
-            q = auxiliary_information
-        elif payload:
-            q = payload.get_requester_question()
-        else:
-            q = "Please drag the puzzle piece to the target location."
+        q = (
+            question
+            or auxiliary_information
+            or (payload.get_requester_question() if payload else None)
+            or "Please drag the puzzle piece to the target location."
+        )
 
-        # 2. Queries
         queries = [
-            await resolve_image_to_base64(challenge_screenshot, http_client=self.client.http_client)
+            await resolve_image_to_base64(
+                challenge_screenshot, http_client=self.client.http_client
+            )
         ]
 
         logger.debug(f"[YesCaptchaPathReasoner] Executing task with prompt='{q}'")
@@ -86,12 +85,10 @@ class YesCaptchaPathReasoner:
             queries=queries,
         )
 
-        # Strongly-typed solution validation: 'box' must be explicitly present with [start, end]
         solution = YesCaptchaPathSolution.model_validate(solution_dict)
 
-        # Calculate viewport coordinate transform
         offset_x, offset_y, scale_x, scale_y = calculate_viewport_transform(
-            challenge_screenshot, kwargs.get("bbox")
+            challenge_screenshot, bbox
         )
 
         paths: list[SpatialPath] = [

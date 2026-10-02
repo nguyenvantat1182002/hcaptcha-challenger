@@ -40,8 +40,7 @@ class YesCaptchaBinaryReasoner:
         if not self._last_response:
             return
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(self._last_response.model_dump_json(indent=2))
+        path.write_text(self._last_response.model_dump_json(indent=2), encoding="utf-8")
 
     async def __call__(
         self,
@@ -51,44 +50,46 @@ class YesCaptchaBinaryReasoner:
         question: str | None = None,
         **kwargs: Any,
     ) -> ImageBinaryChallenge:
-        # 1. Resolve challenge question
-        if question:
-            q = question
-        elif payload:
-            q = payload.get_requester_question()
-        else:
-            q = "Please click each image containing the requested object."
+        q = (
+            question
+            or (payload.get_requester_question() if payload else None)
+            or "Please click each image containing the requested object."
+        )
 
-        # 2. Resolve queries to raw Base64 strings (downloading URLs asynchronously if needed)
         raw_queries: list[Any] = []
         if payload and payload.tasklist:
             raw_queries = [
-                task.datapoint_uri
-                for task in payload.tasklist
-                if task.datapoint_uri
+                task.datapoint_uri for task in payload.tasklist if task.datapoint_uri
             ]
 
         if not raw_queries:
             if not challenge_screenshot:
-                raise ValueError("Neither payload with tasklist nor challenge_screenshot provided.")
+                raise ValueError(
+                    "Neither payload with tasklist nor challenge_screenshot provided."
+                )
             raw_queries = [challenge_screenshot]
 
-        queries = await asyncio.gather(*[
-            resolve_image_to_base64(q, http_client=self.client.http_client)
-            for q in raw_queries
-        ])
+        queries = await asyncio.gather(
+            *[
+                resolve_image_to_base64(query_item, http_client=self.client.http_client)
+                for query_item in raw_queries
+            ]
+        )
 
-        # 3. Resolve anchors to raw Base64 strings
         anchors: list[str] | None = None
         if payload and payload.requester_question_example:
             example = payload.requester_question_example
             raw_anchors = example if isinstance(example, list) else [example]
-            anchors = await asyncio.gather(*[
-                resolve_image_to_base64(a, http_client=self.client.http_client)
-                for a in raw_anchors
-            ])
+            anchors = await asyncio.gather(
+                *[
+                    resolve_image_to_base64(a, http_client=self.client.http_client)
+                    for a in raw_anchors
+                ]
+            )
 
-        logger.debug(f"[YesCaptchaBinaryReasoner] Executing task with question='{q}', {len(queries)} queries")
+        logger.debug(
+            f"[YesCaptchaBinaryReasoner] Executing task with question='{q}', {len(queries)} queries"
+        )
 
         solution_dict = await self.client.execute_task(
             task_type="HCaptchaClassification",
@@ -97,16 +98,14 @@ class YesCaptchaBinaryReasoner:
             anchors=anchors,
         )
 
-        # Strongly-typed solution validation: 'objects' must be explicitly present as list[bool]
         solution = YesCaptchaBinarySolution.model_validate(solution_dict)
 
-        # Map 1D boolean array to 2D coordinates [row, col]
-        coordinates: list[BoundingBoxCoordinate] = []
-        for i, is_target in enumerate(solution.objects):
-            if is_target:
-                row = i // 3
-                col = i % 3
-                coordinates.append(BoundingBoxCoordinate(box_2d=[row, col]))
+        # 3x3 grid index mapping: row = index // 3, col = index % 3
+        coordinates = [
+            BoundingBoxCoordinate(box_2d=[i // 3, i % 3])
+            for i, is_target in enumerate(solution.objects)
+            if is_target
+        ]
 
         result = ImageBinaryChallenge(challenge_prompt=q, coordinates=coordinates)
         self._last_response = result

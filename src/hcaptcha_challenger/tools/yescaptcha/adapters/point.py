@@ -14,6 +14,7 @@ from hcaptcha_challenger.models import (
     PointCoordinate,
 )
 from hcaptcha_challenger.tools.yescaptcha.adapters.base import (
+    ViewportBoundingBox,
     calculate_viewport_transform,
     resolve_image_to_base64,
 )
@@ -50,8 +51,7 @@ class YesCaptchaPointReasoner:
         if not self._last_response:
             return
         path.parent.mkdir(parents=True, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(self._last_response.model_dump_json(indent=2))
+        path.write_text(self._last_response.model_dump_json(indent=2), encoding="utf-8")
 
     async def __call__(
         self,
@@ -61,30 +61,31 @@ class YesCaptchaPointReasoner:
         auxiliary_information: str | None = None,
         payload: CaptchaPayload | None = None,
         question: str | None = None,
+        bbox: ViewportBoundingBox | dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> ImageAreaSelectChallenge:
-        # 1. Resolve question/prompt
-        if question:
-            q = question
-        elif auxiliary_information:
-            q = auxiliary_information
-        elif payload:
-            q = payload.get_requester_question()
-        else:
-            q = "Please select the requested points or areas."
+        q = (
+            question
+            or auxiliary_information
+            or (payload.get_requester_question() if payload else None)
+            or "Please select the requested points or areas."
+        )
 
-        # 2. Queries and anchors (resolve remote URLs / ChallengeImage to raw base64)
         queries = [
-            await resolve_image_to_base64(challenge_screenshot, http_client=self.client.http_client)
+            await resolve_image_to_base64(
+                challenge_screenshot, http_client=self.client.http_client
+            )
         ]
         anchors: list[str] | None = None
         if payload and payload.requester_question_example:
             ex = payload.requester_question_example
             raw_anchors = ex if isinstance(ex, list) else [ex]
-            anchors = await asyncio.gather(*[
-                resolve_image_to_base64(a, http_client=self.client.http_client)
-                for a in raw_anchors
-            ])
+            anchors = await asyncio.gather(
+                *[
+                    resolve_image_to_base64(a, http_client=self.client.http_client)
+                    for a in raw_anchors
+                ]
+            )
 
         logger.debug(f"[YesCaptchaPointReasoner] Executing task with prompt='{q}'")
 
@@ -95,12 +96,10 @@ class YesCaptchaPointReasoner:
             anchors=anchors,
         )
 
-        # Strongly-typed solution validation: 'clicks' must be explicitly present
         solution = YesCaptchaPointSolution.model_validate(solution_dict)
 
-        # Calculate viewport coordinate transform
         offset_x, offset_y, scale_x, scale_y = calculate_viewport_transform(
-            challenge_screenshot, kwargs.get("bbox")
+            challenge_screenshot, bbox
         )
 
         points = [
